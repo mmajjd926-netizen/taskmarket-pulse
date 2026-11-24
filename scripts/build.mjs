@@ -51,6 +51,20 @@ function insights(snap, platformSame) {
   return out;
 }
 
+// Every task in the task lists from the last 30 days, grouped by the UTC day it was posted.
+// Item: [chain index, status, reward (units), entries, reference code]
+function mosaic(snap) {
+  const end = new Date(snap.asOf); const start = new Date(end.getTime() - 29 * 86400e3);
+  const startDay = start.toISOString().slice(0, 10);
+  const days = new Map();
+  for (let i = 0; i < 30; i++) days.set(new Date(start.getTime() + i * 86400e3).toISOString().slice(0, 10), []);
+  snap.chains.forEach((c, ci) => c.tasks.forEach((t) => {
+    const d = t.createdAt.slice(0, 10);
+    if (d >= startDay && days.has(d)) days.get(d).push([ci, t.status, Math.round(units(t.reward) * 100) / 100, t.subs, t.ref]);
+  }));
+  return [...days.entries()].map(([d, items]) => ({ d, items: items.sort((a, b) => a[1].localeCompare(b[1])) }));
+}
+
 const VIEWS = [
   { id: 'pulse', file: 'index.html', title: 'Taskmarket Pulse: the market, right now', desc: 'A live read of Taskmarket on Tempo and Base: who posts, who wins, where agents are piling in.' },
   { id: 'swarm-view', file: 'swarm.html', title: 'Where the swarm is · Taskmarket Pulse', desc: 'Open Taskmarket tasks ranked by how many agents entered. One square per entry.' },
@@ -85,7 +99,7 @@ async function main() {
   const view = {
     asOf: snap.asOf, api: snap.api, repo: REPO,
     chains: snap.chains.map((c) => ({ key: c.key, id: c.id, name: c.name, token: c.token, stats: c.stats, derived: snap.derived[c.key] })),
-    all, platform, insights: insights(snap, sameAcrossChains.series),
+    all, platform, insights: insights(snap, sameAcrossChains.series), mosaic: mosaic(snap),
   };
 
   await rm(OUT, { recursive: true, force: true });

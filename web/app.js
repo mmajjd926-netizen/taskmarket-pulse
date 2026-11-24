@@ -69,6 +69,34 @@
     $('#headline-note').textContent = same.length ? `Same value for both chains (the API counts these platform-wide): ${same.join(', ')}.` : '';
   })();
 
+  // ---------- Hero mosaic: every task of the last 30 days, one tile each ----------
+  (function mosaic() {
+    const M = D.mosaic || [];
+    const COL = { completed: C.paper, open: C.salmon, claimed: C.muted, pending_approval: C.muted, worker_selected: C.muted, expired: C.line, cancelled: C.line };
+    const per = 4, s = 6, gap = 1.6; // 4 tiles across per day
+    const maxRows = Math.max(1, ...M.map((d) => Math.ceil(d.items.length / per)));
+    const colW = per * (s + gap) + 3;
+    const W = M.length * colW, H = maxRows * (s + gap) + 16;
+    let big = null;
+    M.forEach((d) => d.items.forEach((it) => { if (!big || it[2] > big[2]) big = it; }));
+    let g = '';
+    M.forEach((d, i) => {
+      const cnt = {}; d.items.forEach((it) => (cnt[it[1]] = (cnt[it[1]] || 0) + 1));
+      const tipTxt = `<b>${d.d}</b> · ${fmt(d.items.length)} tasks posted<br>` + Object.entries(cnt).map(([k, v]) => `${fmt(v)} ${k.replace('_', ' ')}`).join(' · ');
+      d.items.forEach((it, j) => {
+        const x = i * colW + (j % per) * (s + gap), y = H - 16 - (Math.floor(j / per) + 1) * (s + gap);
+        const hot = it === big;
+        g += `<rect x="${x}" y="${y}" width="${s}" height="${s}" rx="1.6" fill="${hot ? C.magenta : COL[it[1]] || C.muted}"/>`;
+      });
+      g += `<rect x="${i * colW - 1}" y="0" width="${colW}" height="${H}" fill="transparent" data-tip="${tipTxt}"/>`;
+      if (i % 7 === 0 || i === M.length - 1) g += `<text class="mono" x="${i * colW}" y="${H - 2}" style="font-size:9px">${d.d.slice(5)}</text>`;
+    });
+    $('#mosaic').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Every task posted in the last 30 days, one tile each, coloured by outcome">${g}</svg>`;
+    const all = M.flatMap((d) => d.items); const n = (st) => all.filter((x) => st.includes(x[1])).length;
+    $('#mosaic-cap').innerHTML = `<b>Every task of the last 30 days, one tile each</b> (${fmt(all.length)} in the task lists), stacked by the day it was posted.
+      <span class="legend" style="display:inline-flex;margin:4px 0 0"><span><i style="background:${C.paper}"></i>completed ${fmt(n(['completed']))}</span><span><i style="background:${C.salmon}"></i>open ${fmt(n(['open']))}</span><span><i style="background:${C.muted}"></i>in progress ${fmt(n(['claimed', 'pending_approval', 'worker_selected']))}</span><span><i style="background:${C.line}"></i>expired or cancelled ${fmt(n(['expired', 'cancelled']))}</span>${big ? `<span><i style="background:${C.magenta}"></i>largest reward: ${esc(big[4])}, ${money(big[2])} ${D.chains[big[0]].token}</span>` : ''}</span>`;
+  })();
+
   // ---------- Insights ----------
   $('#insights').innerHTML = D.insights.map((i) => `<li><div class="big">${esc(i.big)}</div><div class="t">${esc(i.text)}<small>${esc(i.source)}</small></div></li>`).join('');
 

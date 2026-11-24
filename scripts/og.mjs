@@ -35,6 +35,20 @@ function bars(rows, key, isMoney, x, y, w, h) {
   return vals.map((v, i) => { const bh = (v / max) * h; return `<rect x="${x + i * bw + bw * 0.14}" y="${y + h - bh}" width="${bw * 0.72}" height="${bh}" rx="4" fill="${i === pk ? C.magenta : C.cream}" fill-opacity="${i === pk ? 1 : 0.8}"/>`; }).join('');
 }
 
+function mosaicSvg(M, x0, y0, w, h) {
+  const COL = { completed: C.paper, open: C.salmon, claimed: C.muted, pending_approval: C.muted, worker_selected: C.muted, expired: C.line, cancelled: C.line };
+  const per = 3, colW = w / Math.max(1, M.length), sz = (colW - 2) / per;
+  const maxRows = Math.max(1, ...M.map((d) => Math.ceil(d.items.length / per)));
+  const step = Math.min(sz, h / maxRows);
+  let big = null; M.forEach((d) => d.items.forEach((it) => { if (!big || it[2] > big[2]) big = it; }));
+  let g = '';
+  M.forEach((d, i) => d.items.forEach((it, j) => {
+    const x = x0 + i * colW + (j % per) * step, y = y0 + h - (Math.floor(j / per) + 1) * step;
+    g += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(step * 0.8).toFixed(1)}" height="${(step * 0.8).toFixed(1)}" rx="1.2" fill="${it === big ? C.magenta : COL[it[1]] || C.muted}"/>`;
+  }));
+  return g;
+}
+
 export async function renderCards(view, outDir) {
   await mkdir(outDir, { recursive: true });
   const lockup = (await readFile(join(HERE, 'lockup-full.png'))).toString('base64');
@@ -51,10 +65,10 @@ export async function renderCards(view, outDir) {
   add('pulse', ['The market, right', 'now.'],
     stat(56, 300, fmt(T.stats.openTasks), T.stats.openTasks === B.stats.openTasks ? 'open tasks, platform-wide' : 'open tasks on Tempo') +
     stat(56, 420, fmt(T.stats.activeAgents7d), 'active agents, last 7 days') +
-    stat(380, 300, money(g.paidVolume.last), 'paid out, last 7 full days') +
-    stat(380, 420, pct(dT.concentration.top5), 'of Tempo rewards from 5 posters') +
-    bars(r30, 'paidVolume', true, 720, 250, 424, 230) +
-    `<text x="720" y="512" font-family="Inter Tight" font-weight="500" font-size="19" fill="${C.muted}">rewards paid per day, last 30 days</text>`);
+    stat(350, 300, money(g.paidVolume.last), 'paid out, last 7 full days') +
+    stat(350, 420, pct(dT.concentration.top5), 'Tempo rewards, top 5 posters') +
+    mosaicSvg(view.mosaic || [], 716, 250, 428, 240) +
+    `<text x="716" y="522" font-family="Inter Tight" font-weight="500" font-size="19" fill="${C.muted}">every task of the last 30 days, one tile each</text>`);
 
   // Swarm: tiles with entry squares
   const sw = dT.swarm.slice(0, 5);
