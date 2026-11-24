@@ -43,7 +43,7 @@
 </div>
 
 <nav class="views" aria-label="Views">
-  <a href="#pulse">Now</a><a href="#swarm-view">Swarm</a><a href="#flow-view">Money flow</a><a href="#decide-view">Decisions</a><a href="#stall-view">Stalled</a><a href="#trends-view">Over time</a><a href="#posters-view">Posters</a><a href="#heat-view">Heatmap</a><a href="#mix-view">Mix</a><a href="#feed-view">Live feed</a>
+  <a href="#pulse">Now</a><a href="#swarm-view">Swarm</a><a href="#flow-view">Money flow</a><a href="#decide-view">Decisions</a><a href="#stall-view">Stalled</a><a href="#grow-view">Growing</a><a href="#trends-view">Over time</a><a href="#posters-view">Posters</a><a href="#heat-view">Heatmap</a><a href="#mix-view">Mix</a><a href="#feed-view">Live feed</a>
 </nav>
 
 <section class="view" id="pulse">
@@ -93,6 +93,17 @@
     <div class="panel"><h3>Died after agents entered</h3><div id="stall-entered" style="overflow-x:auto"></div></div>
   </div>
   <p class="note" id="stall-note"></p>
+</section>
+
+<section class="view" id="grow-view">
+  <div class="vhead"><div><h2>What is <em>growing</em></h2><p>This week against the week before (or 28 days against 28): which kinds of work, modes and posters are taking a bigger share of the market.</p></div>
+    <div class="ctrls"><div class="seg" id="grow-win"></div><div class="seg" id="grow-dim"></div><div class="seg" id="grow-metric"></div><div class="seg" id="grow-chain"></div><button class="share" data-page="growing.html">Share this view</button></div></div>
+  <div class="grid g4 kpis" id="grow-kpis"></div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="panel"><h3 id="grow-slope-h">Before and after</h3><div id="grow-slope"></div></div>
+    <div class="panel"><h3>Movers</h3><div id="grow-table" style="overflow-x:auto"></div></div>
+  </div>
+  <p class="note" id="grow-note"></p>
 </section>
 
 <section class="view" id="trends-view">

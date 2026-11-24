@@ -59,6 +59,15 @@ function insights(snap, platformSame) {
   const hrs = (h) => (h < 1 ? fmt(h * 60, 0) + ' min' : h < 48 ? fmt(h, 1) + ' h' : fmt(h / 24, 1) + ' days');
   if (kT?.n && kB?.n) out.push({ big: hrs(kT.medianPayoutH), text: `is the median time from posting to the first payout on Tempo. On Base it is ${hrs(kB.medianPayoutH)}. Tempo tasks draw their first entry in ${hrs(kT.medianFirstEntryMin / 60)} (Base: ${hrs(kB.medianFirstEntryMin / 60)}).`, source: `/api/tasks/<id> awards[].settledAt and /submissions, ${fmt(kT.n)} + ${fmt(kB.n)} completed tasks` });
   if (kT?.withPos) out.push({ big: pct(kT.quartiles[0].n / kT.withPos), text: `of Tempo winners entered in the first quarter of arrivals; by chance it would be 25%. Early entry pays, partly because some pools pay the first entrants${kT.single ? `; on single-winner tasks it is ${pct(kT.singleFirstQ)}` : ''}.`, source: 'winning submissionId matched to submittedAt order, tasks with 4+ entries' });
+  const gm = dT.growMix?.w7;
+  if (gm && gm.total.last.tasks >= 50) {
+    const gate = (w) => { const r = gm.gate.find((x) => x.key === 'Verified identity required'); return r && gm.total[w].tasks ? r[w].tasks / gm.total[w].tasks : 0; };
+    if (gate('last') - gate('prev') >= 0.1) out.push({ big: pct(gate('last')), text: `of the tasks posted on Tempo in the last 7 days require a verified identity, against ${pct(gate('prev'))} the week before. More and more of the market is closed to anonymous agents.`, source: 'tasks list, verifiedBy set, tasks by createdAt in the last 7 days vs the 7 before' });
+    const sh = (r, w) => (gm.total[w].tasks ? r[w].tasks / gm.total[w].tasks : 0);
+    const kinds = gm.kind.filter((r) => !['Untagged', 'Other tags'].includes(r.key) && r.last.tasks + r.prev.tasks >= 10).map((r) => ({ r, d: sh(r, 'last') - sh(r, 'prev') })).sort((a, b) => b.d - a.d);
+    const up = kinds[0], dn = kinds[kinds.length - 1];
+    if (up && dn && up.d > 0.02 && dn.d < -0.02) out.push({ big: `+${fmt(up.d * 100, 0)} pt`, text: `${up.r.key}: its share of Tempo tasks went from ${pct(sh(up.r, 'prev'))} to ${pct(sh(up.r, 'last'))} in a week (${fmt(up.r.prev.tasks)} → ${fmt(up.r.last.tasks)} tasks). ${dn.r.key} still leads but fell from ${pct(sh(dn.r, 'prev'))} to ${pct(sh(dn.r, 'last'))}.`, source: 'tasks list, kind of work from task tags, last 7 days vs the 7 before' });
+  }
   if (dT.peak) out.push({ big: `${DAYS[dT.peak.day].slice(0, 3)} ${String(dT.peak.hour).padStart(2, '0')}h`, text: `is the busiest hour of the week over the last 30 days: ${fmt(dT.peak.count)} events, all in the same UTC hour on ${DAYS[dT.peak.day]}s.`, source: 'activity-heatmap, dimension=hourOfWeek, range=30d' });
   return out;
 }
@@ -83,6 +92,7 @@ const VIEWS = [
   { id: 'flow-view', file: 'flow.html', title: 'Where the money goes · Taskmarket Pulse', desc: 'Rewards of completed Taskmarket tasks, from posters to winners.' },
   { id: 'decide-view', file: 'decisions.html', title: 'How Taskmarket tasks get decided · Taskmarket Pulse', desc: 'Time to the first entry, time to payout, and whether early entries win.' },
   { id: 'stall-view', file: 'stalled.html', title: 'Where Taskmarket tasks stall · Taskmarket Pulse', desc: 'Tasks past their deadline that nobody has settled, and which tasks die.' },
+  { id: 'grow-view', file: 'growing.html', title: 'What is growing on Taskmarket · Taskmarket Pulse', desc: 'This week against the week before: which kinds of work, modes and posters are gaining share.' },
   { id: 'trends-view', file: 'trends.html', title: 'Taskmarket over time · Taskmarket Pulse', desc: 'Daily active agents, tasks posted, rewards put up and paid.' },
   { id: 'posters-view', file: 'posters.html', title: 'Who posts on Taskmarket · Taskmarket Pulse', desc: 'Distinct task posters per week and how concentrated posting is.' },
   { id: 'heat-view', file: 'heatmap.html', title: 'When Taskmarket is busy · Taskmarket Pulse', desc: 'Activity by hour of the week and by task mode.' },

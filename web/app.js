@@ -268,6 +268,76 @@
     draw();
   })();
 
+  // ---------- What is growing ----------
+  (function grow() {
+    let chain = 'tempo', dim = 'kind', metric = 'tasks', win = 'w7';
+    if (!D.chains.every((c) => c.derived.growMix)) return;
+    const DIMS = [['kind', 'Kind of work'], ['mode', 'Mode'], ['gate', 'Identity'], ['poster', 'Poster']];
+    const METRICS = [['tasks', 'Tasks'], ['reward', 'Rewards'], ['posters', 'Posters']];
+    const chg = (a, b) => (b ? (a - b) / b : null);
+    const chs = (x) => (x == null ? 'new' : (x >= 0 ? '+' : '−') + fmt(Math.abs(x) * 100, 0) + '%');
+    const day = (iso) => new Date(iso).toISOString().slice(5, 10).replace('-', '/');
+    function draw() {
+      const c = chainByKey[chain], G = c.derived.growMix, g = G[win];
+      const unit = metric === 'reward' ? ' ' + c.token : '';
+      const val = (x) => (metric === 'reward' ? money(x) : fmt(x));
+      const rows = g[dim].filter((r) => r.last[metric] + r.prev[metric] > 0);
+      const T = g.total;
+      // KPIs
+      const kinds = g.kind.filter((r) => r.key !== 'Untagged' && r.key !== 'Other tags' && r.last.tasks + r.prev.tasks >= 6);
+      const shareOf = (r, w) => (T[w].tasks ? r[w].tasks / T[w].tasks : 0);
+      const mover = kinds.map((r) => ({ r, d: shareOf(r, 'last') - shareOf(r, 'prev') })).sort((a, b) => b.d - a.d);
+      const up = mover[0], down = mover[mover.length - 1];
+      const gate = g.gate.find((r) => r.key === 'Verified identity required');
+      const gs = (w) => (gate && T[w].tasks ? gate[w].tasks / T[w].tasks : 0);
+      $('#grow-kpis').innerHTML = [
+        [chs(chg(T.last.tasks, T.prev.tasks)), `tasks posted: ${fmt(T.last.tasks)} in the last ${g.days} days`, `against ${fmt(T.prev.tasks)} in the ${g.days} before · rewards ${chs(chg(T.last.reward, T.prev.reward))}`],
+        [up && up.d > 0 ? up.r.key : '–', 'gained the most share of tasks', up && up.d > 0 ? `${pct(shareOf(up.r, 'prev'))} → ${pct(shareOf(up.r, 'last'))} of all tasks posted` : 'no kind gained share'],
+        [down && down.d < 0 ? down.r.key : '–', 'lost the most share', down && down.d < 0 ? `${pct(shareOf(down.r, 'prev'))} → ${pct(shareOf(down.r, 'last'))} of all tasks posted` : 'no kind lost share'],
+        [pct(gs('last')), 'of new tasks require a verified identity', `${pct(gs('prev'))} in the ${g.days} days before`],
+      ].map(([v, l, sub], i) => `<div class="panel kpi"><div class="v" style="${i === 1 ? 'color:var(--magenta);' : ''}${String(v).length > 8 ? 'font-size:clamp(18px,2.4vw,26px);line-height:1.15;overflow-wrap:anywhere' : ''}">${esc(v)}</div><div class="l">${l}</div><div class="s">${sub}</div></div>`).join('');
+      // Slope chart (square-root scale so small groups stay visible)
+      const narrow = ($('#grow-slope').clientWidth || 600) < 520;
+      const W = narrow ? 400 : 620, H = narrow ? 380 : 356, xl = narrow ? 52 : 150, xr = narrow ? 200 : 410, top = 34, bot = H - 40;
+      const mx = Math.max(1, ...rows.flatMap((r) => [r.last[metric], r.prev[metric]]));
+      const y = (v) => bot - Math.sqrt(v / mx) * (bot - top);
+      const place = (arr) => { const a = arr.map((o) => ({ ...o })).sort((p, q) => p.y - q.y); for (let i = 1; i < a.length; i++) if (a[i].y - a[i - 1].y < 17) a[i].y = a[i - 1].y + 17; const over = a.length ? a[a.length - 1].y - (bot + 8) : 0; if (over > 0) a.forEach((o) => (o.y -= over)); return a; };
+      const L = place(rows.map((r) => ({ k: r.key, y: y(r.prev[metric]), v: r.prev[metric] })));
+      const R = place(rows.map((r) => ({ k: r.key, y: y(r.last[metric]), v: r.last[metric], c: chg(r.last[metric], r.prev[metric]) })));
+      let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Slope chart, previous 28 days to last 28 days">`;
+      svg += `<text x="${xl}" y="16" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="${C.muted}">${day(g.window.prevFrom)}–${day(g.window.lastFrom)}</text><text x="${xr}" y="16" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="${C.muted}">${day(g.window.lastFrom)}–${day(g.window.to)}</text>`;
+      svg += `<line x1="${xl}" y1="${top - 8}" x2="${xl}" y2="${bot}" stroke="${C.line}"/><line x1="${xr}" y1="${top - 8}" x2="${xr}" y2="${bot}" stroke="${C.line}"/>`;
+      rows.forEach((r) => {
+        const a = r.prev[metric], b = r.last[metric], c2 = chg(b, a);
+        const dsh = b / Math.max(1e-9, T.last[metric] || 0) - a / Math.max(1e-9, T.prev[metric] || 0);
+        const col = dsh > 0.005 ? C.magenta : dsh < -0.005 ? C.salmon : C.cream;
+        const lab = R.find((o) => o.k === r.key), lal = L.find((o) => o.k === r.key);
+        const tipx = `<b>${esc(r.key)}</b><br>${val(a)}${unit} → ${val(b)}${unit} (${chs(c2)})<br>${fmt(r.prev.posters)} → ${fmt(r.last.posters)} posters`;
+        svg += `<g data-tip="${esc(tipx)}"><line x1="${xl}" y1="${y(a)}" x2="${xr}" y2="${y(b)}" stroke="${col}" stroke-width="${Math.abs(dsh) > 0.02 ? 3.2 : 1.6}" opacity=".9" stroke-linecap="round"/>
+          <circle cx="${xl}" cy="${y(a)}" r="4.5" fill="${col}"/><circle cx="${xr}" cy="${y(b)}" r="4.5" fill="${col}"/>
+          <line x1="${xr + 6}" y1="${y(b)}" x2="${xr + 14}" y2="${lab.y}" stroke="${C.line}"/><line x1="${xl - 6}" y1="${y(a)}" x2="${xl - 14}" y2="${lal.y}" stroke="${C.line}"/>
+          <text x="${xr + 18}" y="${lab.y + 4}" font-size="${narrow ? 13 : 12.5}" fill="${C.cream}">${esc(r.key)} <tspan font-family="var(--mono)" fill="${col}">${chs(c2)}</tspan></text>
+          <text x="${xl - 18}" y="${lal.y + 4}" text-anchor="end" font-family="var(--mono)" font-size="11.5" fill="${C.muted}">${val(a)}</text></g>`;
+      });
+      svg += `<text x="0" y="${H - 4}" font-size="11" fill="${C.muted}"><tspan fill="${C.magenta}">●</tspan> gaining share  <tspan fill="${C.salmon}">●</tspan> losing share  <tspan fill="${C.cream}">●</tspan> same${narrow ? '' : ' · square-root scale'}</text>`;
+      svg += '</svg>';
+      $('#grow-slope').innerHTML = rows.length ? svg : '<p class="note">No tasks in these windows.</p>';
+      $('#grow-slope-h').textContent = `${METRICS.find((m) => m[0] === metric)[1]} by ${DIMS.find((d) => d[0] === dim)[1].toLowerCase()}, before and after`;
+      // Movers table: share of the whole market in each window
+      const tm = (w) => Math.max(1e-9, T[w][metric] || 0);
+      const tr = [...rows].sort((a, b) => (b.last[metric] / tm('last') - b.prev[metric] / tm('prev')) - (a.last[metric] / tm('last') - a.prev[metric] / tm('prev')));
+      $('#grow-table').innerHTML = `<table class="t"><thead><tr><th>${DIMS.find((d) => d[0] === dim)[1]}</th><th style="text-align:right">Before</th><th style="text-align:right">Now</th><th style="text-align:right">Change</th><th style="text-align:right">Share</th></tr></thead><tbody>` +
+        tr.map((r) => { const d = r.last[metric] / tm('last') - r.prev[metric] / tm('prev'); return `<tr><td>${esc(r.key)}</td><td class="n">${val(r.prev[metric])}</td><td class="n">${val(r.last[metric])}</td><td class="n">${chs(chg(r.last[metric], r.prev[metric]))}</td><td class="n" style="color:${d > 0.005 ? C.magenta : d < -0.005 ? C.salmon : C.muted}">${d >= 0 ? '+' : '−'}${fmt(Math.abs(d) * 100, 1)} pt</td></tr>`; }).join('') + '</tbody></table>' +
+        `<p class="note">Share = the group's part of all ${metric === 'reward' ? 'rewards put up' : metric === 'posters' ? 'posters (a poster can be in several groups)' : 'tasks posted'} on ${c.name} in each window; the column shows how many percentage points it moved.</p>`;
+      $('#grow-note').innerHTML = `From <code>/api/tasks</code> (${c.name} task list), grouped by <code>createdAt</code> into two back-to-back rolling windows of ${g.days} days ending at the data-as-of time (the current one, and the one before it). Kind of work comes from each task's <code>tags</code> (${fmt(G.tagged)} of ${fmt(G.listed)} listed tasks have tags; <code>tap:*</code> tags are ignored; tasks without tags are "Untagged"). Mode is <code>mode</code>; identity is whether <code>verifiedBy</code> is set; poster is <code>requesterActorType</code>. Posters are distinct <code>requester</code> addresses.`;
+    }
+    seg($('#grow-win'), [['w7', '7 d'], ['w28', '28 d']], win, (v) => { win = v; draw(); });
+    seg($('#grow-dim'), DIMS, dim, (v) => { dim = v; draw(); });
+    seg($('#grow-metric'), METRICS, metric, (v) => { metric = v; draw(); });
+    seg($('#grow-chain'), D.chains.map((c) => [c.key, c.name]), chain, (v) => { chain = v; draw(); });
+    draw();
+  })();
+
   // ---------- Trends (small multiples) ----------
   (function trends() {
     let range = '30d', chain = D.chains[0].key;

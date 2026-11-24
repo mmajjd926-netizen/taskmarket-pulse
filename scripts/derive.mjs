@@ -199,13 +199,58 @@ export function derive(c, asOf) {
   }
   growth.window = { from: last[0]?.bucket, to: last[last.length - 1]?.bucket, prevFrom: prev[0]?.bucket, prevTo: prev[prev.length - 1]?.bucket };
 
+  // What's growing: tasks posted, rewards put up and distinct posters in the last 28 days vs the 28 days before,
+  // grouped by kind of work (from task tags), mode, poster type and whether the task requires a verified identity.
+  // Order matters on ties: narrower kinds first, code last.
+  const KINDS = [
+    ['Art and media', /^(design|logo|branding|illustration|art|image|images|video|music|audio|animation|3d|physical|prototype|meme|memes|comic|font|photo|ui|ux|visual|interactive-art|science-art|portrait|avatar|cover|visuals|illustrations|sprites|icons)$/],
+    ['Writing', /^(writing|copywriting|content|documentation|docs|editing|proofreading|summari[sz]ation|email|text|translation|blog|article|markdown|checklist|poetry|story|fiction|haiku|script|russian|spanish|chinese|japanese|korean|explainer|rules|education|guide|tutorial|naming)$/],
+    ['Data and research', /^(data|analysis|research|dataset|labels|labeling|labelling|open-labels|dashboard|visualizer|visualization|survey|benchmark|maths?|math|statistics|test-cases|synthetic-data|verification|csv|audit|evaluation|classification)$/],
+    ['Growth and marketing', /^(growth|growth-hack|marketing|bounties|social|community|seo|landing-page|product|outreach|ads)$/],
+    ['Code and games', /^(javascript|typescript|python|rust|go|solidity|coding|code|programming|server|backend|frontend|game|html|css|sim|protocol|telemetry|api|bot|github|mcp|cli|sdk|react|node|smart-contracts?|scraping|automation|devops|testing|threejs|arcade|creative-coding|x402|demo|roguelike|combat|poker|webgl|canvas|ghost-crew|mech-market|football-manager|tilefall|starfall-21|dragons-wager|river-room|workparty|game-dev|page|core|table|tables|foundation|release|first-play|spectator|service|feature|bugfix|refactor)$/],
+  ];
+  const kindOf = (t) => {
+    const tags = (t.tags || []).map((x) => x.toLowerCase()).filter((x) => !x.startsWith('tap'));
+    if (!tags.length) return 'Untagged';
+    let best = null, bestN = 0;
+    for (const [k, re] of KINDS) { const n = tags.filter((x) => re.test(x)).length; if (n > bestN) { best = k; bestN = n; } }
+    return best || 'Other tags';
+  };
+  const mix = (days) => {
+    const WIN = days * 86400e3;
+    const which = (t) => { const x = now - new Date(t.createdAt).getTime(); return x >= 0 && x < WIN ? 'last' : x >= WIN && x < 2 * WIN ? 'prev' : null; };
+    const agg = (keyFn) => {
+      const m = new Map();
+      for (const t of tasks) {
+        const w = which(t);
+        if (!w) continue;
+        const k = keyFn(t);
+        if (!m.has(k)) m.set(k, { key: k, last: { tasks: 0, reward: 0, posters: new Set() }, prev: { tasks: 0, reward: 0, posters: new Set() } });
+        const e = m.get(k)[w];
+        e.tasks++; e.reward += units(t.reward); e.posters.add(t.requester);
+      }
+      const fin = (e) => ({ tasks: e.tasks, reward: round(e.reward), posters: e.posters.size });
+      return [...m.values()].map((g) => ({ key: g.key, last: fin(g.last), prev: fin(g.prev) })).sort((a, b) => (b.last.tasks + b.prev.tasks) - (a.last.tasks + a.prev.tasks));
+    };
+    const tot = (k) => { const g = tasks.filter((t) => which(t) === k); return { tasks: g.length, reward: round(g.reduce((s, t) => s + units(t.reward), 0)), posters: new Set(g.map((t) => t.requester)).size }; };
+    return {
+      days, window: { lastFrom: new Date(now - WIN).toISOString(), prevFrom: new Date(now - 2 * WIN).toISOString(), to: new Date(now).toISOString() },
+      total: { last: tot('last'), prev: tot('prev') },
+      kind: agg(kindOf),
+      mode: agg((t) => t.mode || 'unknown'),
+      poster: agg((t) => (t.requesterType === 'agent' ? 'Agent posters' : t.requesterType ? 'Human posters' : 'Not stated')),
+      gate: agg((t) => (t.gated ? 'Verified identity required' : 'Open to any agent')),
+    };
+  };
+  const growMix = { w7: mix(7), w28: mix(28), tagged: tasks.filter((t) => (t.tags || []).length).length, listed: tasks.length };
+
   // Busiest hour of the week (30d heatmap, UTC).
   const cells = c.heatmap?.hourOfWeek?.['30d']?.cells || [];
   const peak = cells.reduce((m, x) => (x.count > (m?.count || 0) ? x : m), null);
 
   const bdTotal = (c.breakdowns?.status || []).reduce((s, x) => s + x.count, 0);
   return {
-    postersPerWeek, concentration, flow, decisions, swarm, odds, liveTotals, status, died, diedReward, ignored, competition, growth, firstTask, stall,
+    postersPerWeek, concentration, flow, decisions, swarm, odds, liveTotals, status, died, diedReward, ignored, competition, growth, firstTask, stall, growMix,
     peak: peak ? { day: Number(peak.row), hour: Number(peak.col), count: peak.count } : null,
     coverage: { listed: tasks.length, breakdownTotal: bdTotal },
   };

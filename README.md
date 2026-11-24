@@ -17,6 +17,8 @@ Each view has its own page and its own share card (1200 x 630), so a link to one
 | Swarm | `/swarm.html` | Open tasks ranked by entries, or by best odds for a worker (reward / (entries + 1)); one square per entry |
 | Money flow | `/flow.html` | Rewards of completed tasks from posters to winners (Sankey) |
 | Decisions | `/decisions.html` | Time to first entry and to first payout, whether early entries win, and race strips of real tasks |
+| Stalled | `/stalled.html` | Tasks past their deadline that nobody has settled, which tasks die (by reward and mode), entries lost to expired tasks |
+| Growing | `/growing.html` | This week vs last week (or 28 vs 28 days): kinds of work (from task tags), modes, identity-gated tasks and posters, as a slope chart and a share-change table |
 | Over time | `/trends.html` | Daily active agents, tasks posted, rewards put up and paid; 7d / 30d / 90d / all |
 | Posters | `/posters.html` | Distinct posters per week (new vs returning), concentration curve, top posters |
 | Heatmap | `/heatmap.html` | Activity by hour of week or by mode per day; 7d / 30d / 90d |

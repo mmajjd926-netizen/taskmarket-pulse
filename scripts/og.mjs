@@ -132,6 +132,31 @@ export async function renderCards(view, outDir) {
       `<text x="560" y="548" font-family="Inter Tight" font-weight="500" font-size="17" fill="${C.muted}">time past the deadline: Base (cream, magenta) · Tempo (salmon)</text>`);
   }
 
+  // Growing: slope of Tempo kinds of work, last 7 days vs the 7 before
+  const gw = dT.growMix?.w7;
+  if (gw) {
+    const rows = gw.kind.filter((r) => r.last.tasks + r.prev.tasks > 0 && r.key !== 'Other tags');
+    const mx = Math.max(1, ...rows.flatMap((r) => [r.last.tasks, r.prev.tasks]));
+    const X1 = 600, X2 = 900, Y0 = 470, Y1 = 250;
+    const yy = (v) => Y0 - Math.sqrt(v / mx) * (Y0 - Y1);
+    const T = gw.total;
+    let gb = `<line x1="${X1}" y1="${Y1 - 10}" x2="${X1}" y2="${Y0}" stroke="${C.line}" stroke-width="2"/><line x1="${X2}" y1="${Y1 - 10}" x2="${X2}" y2="${Y0}" stroke="${C.line}" stroke-width="2"/>`;
+    const labs = [];
+    rows.forEach((r) => {
+      const d = r.last.tasks / Math.max(1, T.last.tasks) - r.prev.tasks / Math.max(1, T.prev.tasks);
+      const col = d > 0.005 ? C.magenta : d < -0.005 ? C.salmon : C.cream;
+      gb += `<line x1="${X1}" y1="${yy(r.prev.tasks)}" x2="${X2}" y2="${yy(r.last.tasks)}" stroke="${col}" stroke-width="5" stroke-linecap="round"/><circle cx="${X1}" cy="${yy(r.prev.tasks)}" r="7" fill="${col}"/><circle cx="${X2}" cy="${yy(r.last.tasks)}" r="7" fill="${col}"/>`;
+      labs.push({ y: yy(r.last.tasks), t: r.key, col });
+    });
+    labs.sort((a, b) => a.y - b.y); for (let i = 1; i < labs.length; i++) if (labs[i].y - labs[i - 1].y < 24) labs[i].y = labs[i - 1].y + 24;
+    labs.forEach((l) => { gb += `<text x="${X2 + 18}" y="${l.y + 6}" font-family="Inter Tight" font-weight="500" font-size="18" fill="${l.col}">${esc(l.t)}</text>`; });
+    const gate = gw.gate.find((x) => x.key === 'Verified identity required');
+    const gs = gate && T.last.tasks ? gate.last.tasks / T.last.tasks : 0;
+    const chg = T.prev.tasks ? (T.last.tasks - T.prev.tasks) / T.prev.tasks : 0;
+    add('grow-view', ['What is', 'growing.'], gb + stat(56, 300, (chg >= 0 ? '+' : '−') + fmt(Math.abs(chg) * 100, 0) + '%', 'Tempo tasks posted, week on week') + stat(56, 420, pct(gs), 'of new tasks need a verified identity') +
+      `<text x="${X1 - 10}" y="${Y0 + 42}" font-family="Inter Tight" font-weight="500" font-size="17" fill="${C.muted}">kinds of work, last week → this week (magenta gains share)</text>`);
+  }
+
   // Trends
   add('trends-view', ['Taskmarket over', 'time.'],
     bars(r30, 'activeAgents', false, 56, 250, 520, 230) + bars(r30, 'rewardVolume', true, 624, 250, 520, 230) +

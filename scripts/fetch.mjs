@@ -76,6 +76,8 @@ async function chainSnapshot(c) {
     winner: t.primaryAward?.workerAddress ? t.primaryAward.workerAddress.toLowerCase() : null,
     claimedBy: t.claimedBy ? String(t.claimedBy).toLowerCase() : null,
     open: !!t.submissionWindowOpen, phase: t.phase || null,
+    tags: Array.isArray(t.tags) ? t.tags.filter((x) => typeof x === 'string').slice(0, 12) : [],
+    gated: Array.isArray(t.verifiedBy) && t.verifiedBy.length > 0,
     title: String(t.description || '').split('\n')[0].slice(0, 140),
   }));
   const det = await completedDetails(c.key, slim, get);
