@@ -140,6 +140,21 @@ export function derive(c, asOf) {
   const ignored = tasks.filter((t) => t.status === 'open' && t.subs === 0 && now - new Date(t.createdAt).getTime() > 72 * 3600e3).length;
   const diedReward = round(tasks.filter((t) => t.status === 'expired' || t.status === 'cancelled').reduce((s, t) => s + units(t.reward), 0));
 
+  // First task outcome vs coming back: posters whose first listed task is 10+ days old, grouped by how that first task ended
+  // (died with no entries / died with entries / paid), and whether they posted another task more than an hour later.
+  const postersFirst = new Map();
+  for (const t of tasks) { if (!postersFirst.has(t.requester)) postersFirst.set(t.requester, []); postersFirst.get(t.requester).push(t) }
+  const firstTask = { died0: { n: 0, again: 0 }, diedEntries: { n: 0, again: 0 }, paid: { n: 0, again: 0 } };
+  for (const list of postersFirst.values()) {
+    list.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const f = list[0], ft = new Date(f.createdAt).getTime();
+    if (now - ft < 10 * 86400e3) continue;
+    const g = f.status === 'completed' ? 'paid' : (f.status === 'expired' || f.status === 'cancelled') ? (f.subs ? 'diedEntries' : 'died0') : null;
+    if (!g) continue;
+    firstTask[g].n++;
+    if (list.slice(1).some((t) => new Date(t.createdAt).getTime() > ft + 3600e3)) firstTask[g].again++;
+  }
+
   // Competition: entries per completed bounty and reward per entry.
   const doneBounty = tasks.filter((t) => t.status === 'completed' && t.mode === 'bounty' && t.subs > 0);
   const competition = {
@@ -167,7 +182,7 @@ export function derive(c, asOf) {
 
   const bdTotal = (c.breakdowns?.status || []).reduce((s, x) => s + x.count, 0);
   return {
-    postersPerWeek, concentration, flow, decisions, swarm, odds, liveTotals, status, died, diedReward, ignored, competition, growth,
+    postersPerWeek, concentration, flow, decisions, swarm, odds, liveTotals, status, died, diedReward, ignored, competition, growth, firstTask,
     peak: peak ? { day: Number(peak.row), hour: Number(peak.col), count: peak.count } : null,
     coverage: { listed: tasks.length, breakdownTotal: bdTotal },
   };
