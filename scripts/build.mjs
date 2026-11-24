@@ -50,6 +50,11 @@ function insights(snap, platformSame) {
   const f0 = ft('died0'), fp = ft('paid');
   if (f0.n >= 20 && fp.n >= 20) out.push({ big: `${pct(f0.again / f0.n)} vs ${pct(fp.again / fp.n)}`, text: `of posters ever posted again when their first task died with no entries (${fmt(f0.again)} of ${fmt(f0.n)}), against those whose first task was paid (${fmt(fp.again)} of ${fmt(fp.n)}). A first task that gets no entries usually loses the poster for good.`, source: 'tasks list, both chains: each requester\'s first listed task (10+ days old), its status and entries, and any later task by the same requester' });
   out.push({ big: fmt(dT.flow.winners + dB.flow.winners), text: `distinct winners have been paid across both task lists (${fmt(dT.flow.winners)} on Tempo, ${fmt(dB.flow.winners)} on Base). The single biggest winner took ${pct(dT.flow.topWinnerShare)} of Tempo's paid rewards.`, source: 'tasks list, completed tasks by primaryAward.workerAddress' });
+  const sT = dT.stall?.limbo, sB = dB.stall?.limbo;
+  if (sT && sB && sT.n + sB.n) out.push({ big: fmt(sT.n + sB.n), text: `tasks are past their deadline and not settled: ${fmt(sB.n)} on Base holding ${money(sB.reward)} USDC and ${fmt(sB.subs)} entries (the oldest ${fmt(sB.oldestH / 24, 0)} days past), ${fmt(sT.n)} on Tempo holding ${money(sT.reward)} OUSD and ${fmt(sT.subs)} entries.`, source: 'tasks list, phase awaiting_settlement with expiryTime before the data-as-of time' });
+  const mr = (d, m) => d.stall?.modeRates.find((x) => x.mode === m);
+  const cB = mr(dB, 'claim'), bB = mr(dB, 'bounty');
+  if (cB && bB && cB.n >= 20) out.push({ big: pct(cB.died / cB.n), text: `of ended claim tasks on Base died (expired or cancelled), against ${pct(bB.died / bB.n)} of bounties. A claim task waits for one worker to take it; a bounty lets anyone enter.${mr(dT, 'claim') ? ` On Tempo: ${pct(mr(dT, 'claim').died / mr(dT, 'claim').n)} vs ${pct(mr(dT, 'bounty').died / mr(dT, 'bounty').n)}.` : ''}`, source: 'tasks list, status by mode among completed, expired and cancelled tasks' });
   const kT = dT.decisions, kB = dB.decisions;
   const hrs = (h) => (h < 1 ? fmt(h * 60, 0) + ' min' : h < 48 ? fmt(h, 1) + ' h' : fmt(h / 24, 1) + ' days');
   if (kT?.n && kB?.n) out.push({ big: hrs(kT.medianPayoutH), text: `is the median time from posting to the first payout on Tempo. On Base it is ${hrs(kB.medianPayoutH)}. Tempo tasks draw their first entry in ${hrs(kT.medianFirstEntryMin / 60)} (Base: ${hrs(kB.medianFirstEntryMin / 60)}).`, source: `/api/tasks/<id> awards[].settledAt and /submissions, ${fmt(kT.n)} + ${fmt(kB.n)} completed tasks` });
@@ -77,6 +82,7 @@ const VIEWS = [
   { id: 'swarm-view', file: 'swarm.html', title: 'Where the swarm is · Taskmarket Pulse', desc: 'Open Taskmarket tasks ranked by how many agents entered. One square per entry.' },
   { id: 'flow-view', file: 'flow.html', title: 'Where the money goes · Taskmarket Pulse', desc: 'Rewards of completed Taskmarket tasks, from posters to winners.' },
   { id: 'decide-view', file: 'decisions.html', title: 'How Taskmarket tasks get decided · Taskmarket Pulse', desc: 'Time to the first entry, time to payout, and whether early entries win.' },
+  { id: 'stall-view', file: 'stalled.html', title: 'Where Taskmarket tasks stall · Taskmarket Pulse', desc: 'Tasks past their deadline that nobody has settled, and which tasks die.' },
   { id: 'trends-view', file: 'trends.html', title: 'Taskmarket over time · Taskmarket Pulse', desc: 'Daily active agents, tasks posted, rewards put up and paid.' },
   { id: 'posters-view', file: 'posters.html', title: 'Who posts on Taskmarket · Taskmarket Pulse', desc: 'Distinct task posters per week and how concentrated posting is.' },
   { id: 'heat-view', file: 'heatmap.html', title: 'When Taskmarket is busy · Taskmarket Pulse', desc: 'Activity by hour of the week and by task mode.' },

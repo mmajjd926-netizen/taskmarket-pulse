@@ -43,7 +43,7 @@
 </div>
 
 <nav class="views" aria-label="Views">
-  <a href="#pulse">Now</a><a href="#swarm-view">Swarm</a><a href="#flow-view">Money flow</a><a href="#decide-view">Decisions</a><a href="#trends-view">Over time</a><a href="#posters-view">Posters</a><a href="#heat-view">Heatmap</a><a href="#mix-view">Mix</a><a href="#feed-view">Live feed</a>
+  <a href="#pulse">Now</a><a href="#swarm-view">Swarm</a><a href="#flow-view">Money flow</a><a href="#decide-view">Decisions</a><a href="#stall-view">Stalled</a><a href="#trends-view">Over time</a><a href="#posters-view">Posters</a><a href="#heat-view">Heatmap</a><a href="#mix-view">Mix</a><a href="#feed-view">Live feed</a>
 </nav>
 
 <section class="view" id="pulse">
@@ -78,6 +78,21 @@
   <div class="panel" style="margin-top:14px"><h3>The race, task by task</h3><div id="decide-races"></div>
     <div class="legend"><span><i style="background:var(--paper)"></i>an entry</span><span><i style="background:var(--magenta)"></i>a winning entry</span><span><i style="background:var(--salmon)"></i>first payout</span><span>time since posting, log scale</span></div></div>
   <p class="note" id="decide-note"></p>
+</section>
+
+<section class="view" id="stall-view">
+  <div class="vhead"><div><h2>Where tasks <em>stall</em></h2><p>Tasks past their deadline that nobody has settled yet, and the ones that died: what they had in common.</p></div>
+    <div class="ctrls"><div class="seg" id="stall-chain"></div><button class="share" data-page="stalled.html">Share this view</button></div></div>
+  <div class="grid g4 kpis" id="stall-kpis"></div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="panel"><h3>Past the deadline, not settled</h3><div id="stall-limbo"></div></div>
+    <div class="panel"><h3>Which tasks die</h3><div id="stall-rates"></div></div>
+  </div>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="panel"><h3>Longest past the deadline</h3><div id="stall-oldest" style="overflow-x:auto"></div></div>
+    <div class="panel"><h3>Died after agents entered</h3><div id="stall-entered" style="overflow-x:auto"></div></div>
+  </div>
+  <p class="note" id="stall-note"></p>
 </section>
 
 <section class="view" id="trends-view">

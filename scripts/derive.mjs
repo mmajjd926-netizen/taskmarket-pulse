@@ -140,6 +140,29 @@ export function derive(c, asOf) {
   const ignored = tasks.filter((t) => t.status === 'open' && t.subs === 0 && now - new Date(t.createdAt).getTime() > 72 * 3600e3).length;
   const diedReward = round(tasks.filter((t) => t.status === 'expired' || t.status === 'cancelled').reduce((s, t) => s + units(t.reward), 0));
 
+  // Where tasks stall and die. Ended = completed, expired or cancelled. "Past the deadline, not settled" =
+  // phase awaiting_settlement from /api/tasks: the entry window has closed and no payout or refund has happened yet.
+  const isDead = (t) => t.status === 'expired' || t.status === 'cancelled';
+  const ended = tasks.filter((t) => t.status === 'completed' || isDead(t));
+  const rate = (g) => ({ n: g.length, died: g.filter(isDead).length });
+  const rewardRates = [['under 0.50', 0, 0.5], ['0.50 to 1', 0.5, 1.0001], ['1 to 5', 1.0001, 5.0001], ['5 to 20', 5.0001, 20.0001], ['over 20', 20.0001, Infinity]]
+    .map(([label, lo, hi]) => ({ label, ...rate(ended.filter((t) => units(t.reward) >= lo && units(t.reward) < hi)) }));
+  const modeRates = [...new Set(ended.map((t) => t.mode))].map((m) => ({ mode: m, ...rate(ended.filter((t) => t.mode === m)) })).sort((a, b) => b.n - a.n);
+  const pastH = (t) => (now - new Date(t.expiryTime).getTime()) / 3600e3;
+  const lt = (t) => ({ id: t.id, ref: t.ref, title: String(t.title || '').replace(/[#*_`]+/g, ' ').replace(/\s+/g, ' ').trim() || t.ref, reward: units(t.reward), subs: t.subs, mode: t.mode, status: t.status,
+    createdAt: t.createdAt, expiryTime: t.expiryTime, pastH: t.expiryTime ? round(pastH(t), 1) : null });
+  const limbo = tasks.filter((t) => t.phase === 'awaiting_settlement' && t.expiryTime && pastH(t) > 0);
+  const limboBuckets = [['under 1 day', 0, 24], ['1 to 3 days', 24, 72], ['3 to 7 days', 72, 168], ['1 to 4 weeks', 168, 672], ['over 4 weeks', 672, Infinity]]
+    .map(([label, lo, hi]) => { const g = limbo.filter((t) => pastH(t) >= lo && pastH(t) < hi); return { label, n: g.length, reward: round(g.reduce((s, t) => s + units(t.reward), 0)), subs: g.reduce((s, t) => s + t.subs, 0) }; });
+  const diedEntered = ended.filter((t) => isDead(t) && t.subs > 0).sort((a, b) => b.subs - a.subs);
+  const stall = {
+    ended: ended.length, died: ended.filter(isDead).length, rewardRates, modeRates,
+    diedEntered: { n: diedEntered.length, subs: diedEntered.reduce((s, t) => s + t.subs, 0), reward: round(diedEntered.reduce((s, t) => s + units(t.reward), 0)), top: diedEntered.slice(0, 6).map(lt) },
+    limbo: { n: limbo.length, reward: round(limbo.reduce((s, t) => s + units(t.reward), 0)), subs: limbo.reduce((s, t) => s + t.subs, 0),
+      oldestH: limbo.length ? round(Math.max(...limbo.map(pastH)), 1) : 0, week: limbo.filter((t) => pastH(t) >= 168).length,
+      buckets: limboBuckets, top: [...limbo].sort((a, b) => pastH(b) - pastH(a)).slice(0, 8).map(lt) },
+  };
+
   // First task outcome vs coming back: posters whose first listed task is 10+ days old, grouped by how that first task ended
   // (died with no entries / died with entries / paid), and whether they posted another task more than an hour later.
   const postersFirst = new Map();
@@ -182,7 +205,7 @@ export function derive(c, asOf) {
 
   const bdTotal = (c.breakdowns?.status || []).reduce((s, x) => s + x.count, 0);
   return {
-    postersPerWeek, concentration, flow, decisions, swarm, odds, liveTotals, status, died, diedReward, ignored, competition, growth, firstTask,
+    postersPerWeek, concentration, flow, decisions, swarm, odds, liveTotals, status, died, diedReward, ignored, competition, growth, firstTask, stall,
     peak: peak ? { day: Number(peak.row), hour: Number(peak.col), count: peak.count } : null,
     coverage: { listed: tasks.length, breakdownTotal: bdTotal },
   };

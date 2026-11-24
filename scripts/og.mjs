@@ -119,6 +119,19 @@ export async function renderCards(view, outDir) {
       `<text x="520" y="548" font-family="Inter Tight" font-weight="500" font-size="19" fill="${C.muted}">entries (cream), winners (magenta), first payout (line)</text>`);
   }
 
+  // Stalled: unsettled tasks past their deadline, by age
+  const sl = dB.stall?.limbo, slT = dT.stall?.limbo;
+  if (sl && slT) {
+    const bk = sl.buckets.map((b, i) => ({ ...b, nT: slT.buckets[i].n }));
+    const mxs = Math.max(...bk.map((b) => b.n + b.nT), 1);
+    let sb = '';
+    bk.forEach((b, i) => { const x = 560 + i * 118, hB = (b.n / mxs) * 230, hT = (b.nT / mxs) * 230;
+      sb += `<rect x="${x}" y="${480 - hB - hT}" width="86" height="${Math.max(hT, 0)}" rx="5" fill="${C.salmon}"/><rect x="${x}" y="${480 - hB}" width="86" height="${Math.max(hB, 0)}" rx="5" fill="${i >= 3 ? C.magenta : C.cream}"/>
+        <text x="${x + 43}" y="512" text-anchor="middle" font-family="Inter Tight" font-weight="500" font-size="16" fill="${C.muted}">${esc(b.label.replace('under ', '<').replace(' to ', '–').replace('over ', '>'))}</text>`; });
+    add('stall-view', ['Where tasks', 'stall.'], sb + stat(56, 300, fmt(sl.n + slT.n), 'tasks past deadline, not settled') + stat(56, 420, `${fmt(sl.oldestH / 24, 0)} days`, 'the longest wait on Base') +
+      `<text x="560" y="548" font-family="Inter Tight" font-weight="500" font-size="17" fill="${C.muted}">time past the deadline: Base (cream, magenta) · Tempo (salmon)</text>`);
+  }
+
   // Trends
   add('trends-view', ['Taskmarket over', 'time.'],
     bars(r30, 'activeAgents', false, 56, 250, 520, 230) + bars(r30, 'rewardVolume', true, 624, 250, 520, 230) +

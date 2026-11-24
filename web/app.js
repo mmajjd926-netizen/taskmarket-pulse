@@ -233,6 +233,41 @@
     draw();
   })();
 
+  // ---------- Where tasks stall ----------
+  (function stall() {
+    let chain = 'base';
+    const wait = (h) => (h < 48 ? fmt(h, 0) + ' h' : fmt(h / 24, 0) + ' days');
+    const row = (label, w, val, tip, color, op = 0.85) => `<div style="display:grid;grid-template-columns:96px 1fr 92px;gap:10px;align-items:center;margin:8px 0" data-tip="${tip}">
+      <span style="font-size:13px">${label}</span><span style="height:14px;border-radius:4px;background:${color};opacity:${op};width:${Math.max(w, 0.6)}%"></span><span style="font-family:var(--mono);text-align:right;font-size:12.5px">${val}</span></div>`;
+    const link = (t, c) => `<a href="https://taskmarket.dev/tasks/${esc(t.id)}?chain=${c.id}" target="_blank" rel="noopener" style="color:var(--cream);text-decoration:none">${esc(t.title.slice(0, 54))}${t.title.length > 54 ? '…' : ''}</a><div class="mono" style="font-size:10.5px;color:var(--muted)">${esc(t.ref)} · ${esc(t.mode)}</div>`;
+    function draw() {
+      const c = chainByKey[chain], s = c.derived.stall;
+      if (!s) return;
+      const L = s.limbo, br = (m) => s.modeRates.find((x) => x.mode === m);
+      const cl = br('claim'), bo = br('bounty');
+      $('#stall-kpis').innerHTML = [
+        [fmt(L.n), 'tasks past their deadline and not settled', `${money(L.reward)} ${c.token} held · ${fmt(L.subs)} entries waiting`],
+        [wait(L.oldestH), 'the longest any of them has waited', `${fmt(L.week)} have waited over a week`],
+        [pct(s.died / Math.max(1, s.ended)), 'of ended tasks died (expired or cancelled)', `${fmt(s.died)} of ${fmt(s.ended)} ended tasks`],
+        [cl && bo ? `${pct(cl.died / cl.n)} vs ${pct(bo.died / bo.n)}` : '–', 'of claim tasks died, against bounties', cl && bo ? `${fmt(cl.n)} claim, ${fmt(bo.n)} bounty tasks ended` : ''],
+      ].map(([v, l, sub], i) => `<div class="panel kpi"><div class="v" ${i === 0 ? 'style="color:var(--magenta)"' : ''}>${v}</div><div class="l">${l}</div><div class="s">${sub}</div></div>`).join('');
+      const mxL = Math.max(...L.buckets.map((b) => b.n), 1);
+      $('#stall-limbo').innerHTML = L.buckets.map((b, i) => row(b.label, (b.n / mxL) * 100, `${fmt(b.n)} · ${money(b.reward)}`, `<b>${fmt(b.n)}</b> tasks, ${money(b.reward)} ${c.token}, ${fmt(b.subs)} entries waiting`, i >= 3 ? C.magenta : C.salmon, i >= 3 ? 1 : 0.8)).join('') +
+        `<p class="note">How long past the deadline each unsettled task is: count · reward held (${c.token}). Recent ones are normal (pools pay by rule after the close); weeks-old ones hold entrants' work and the poster's money in escrow.</p>`;
+      $('#stall-rates').innerHTML = `<div class="l" style="font-size:12px;color:var(--muted);margin-bottom:2px">by reward size (${c.token})</div>` +
+        s.rewardRates.filter((r) => r.n).map((r) => row(r.label, (r.died / r.n) * 100, `${pct(r.died / r.n)} of ${fmt(r.n)}`, `<b>${fmt(r.died)}</b> of ${fmt(r.n)} ended tasks died`, C.cream, 0.8)).join('') +
+        `<div class="l" style="font-size:12px;color:var(--muted);margin:12px 0 2px">by mode</div>` +
+        s.modeRates.filter((r) => r.n >= 3).map((r) => row(r.mode, (r.died / r.n) * 100, `${pct(r.died / r.n)} of ${fmt(r.n)}`, `<b>${fmt(r.died)}</b> of ${fmt(r.n)} ended ${esc(r.mode)} tasks died`, r.died / r.n > 0.5 ? C.magenta : C.cream, r.died / r.n > 0.5 ? 1 : 0.8)).join('');
+      const tbl = (rows, cols) => rows.length ? `<table class="t"><thead><tr><th>Task</th>${cols.map((x) => `<th style="text-align:right">${x[0]}</th>`).join('')}</tr></thead><tbody>${rows.map((t) => `<tr><td>${link(t, c)}</td>${cols.map((x) => `<td class="n">${x[1](t)}</td>`).join('')}</tr>`).join('')}</tbody></table>` : '<p class="note">None in the task list.</p>';
+      $('#stall-oldest').innerHTML = tbl(L.top.slice(0, 6), [['Reward', (t) => money(t.reward)], ['Entries', (t) => fmt(t.subs)], ['Past deadline', (t) => wait(t.pastH)]]);
+      $('#stall-entered').innerHTML = tbl(s.diedEntered.top, [['Reward', (t) => money(t.reward)], ['Entries', (t) => fmt(t.subs)], ['Ended', (t) => esc(t.status)]]) +
+        `<p class="note">${fmt(s.diedEntered.n)} ${c.name} tasks expired or were cancelled after drawing ${fmt(s.diedEntered.subs)} entries in all; their ${money(s.diedEntered.reward)} ${c.token} went back to the posters.</p>`;
+      $('#stall-note').innerHTML = `From <code>/api/tasks</code> (${c.name} task list): <code>status</code>, <code>phase</code>, <code>expiryTime</code>, <code>submissionCount</code>, <code>reward</code>, <code>mode</code>. "Past the deadline, not settled" is <code>phase = awaiting_settlement</code> with <code>expiryTime</code> before the data-as-of time. "Died" is status <code>expired</code> or <code>cancelled</code>; "ended" adds <code>completed</code>.`;
+    }
+    seg($('#stall-chain'), D.chains.map((c) => [c.key, c.name]), chain, (v) => { chain = v; draw(); });
+    draw();
+  })();
+
   // ---------- Trends (small multiples) ----------
   (function trends() {
     let range = '30d', chain = D.chains[0].key;
