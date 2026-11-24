@@ -49,7 +49,7 @@ export async function renderCards(view, outDir) {
   const g = dT.growth;
   const r30 = P.series['30d'].rows;
   add('pulse', ['The market, right', 'now.'],
-    stat(56, 300, fmt(T.stats.openTasks + B.stats.openTasks), 'open tasks, Tempo + Base') +
+    stat(56, 300, fmt(T.stats.openTasks), T.stats.openTasks === B.stats.openTasks ? 'open tasks, platform-wide' : 'open tasks on Tempo') +
     stat(56, 420, fmt(T.stats.activeAgents7d), 'active agents, last 7 days') +
     stat(380, 300, money(g.paidVolume.last), 'paid out, last 7 full days') +
     stat(380, 420, pct(dT.concentration.top5), 'of Tempo rewards from 5 posters') +
@@ -109,7 +109,7 @@ export async function renderCards(view, outDir) {
   let hb = '';
   for (let r = 0; r < 7; r++) for (let c = 0; c < 24; c++) {
     const v = cm.get(String(r) + '|' + String(c)) || 0, isPk = pk && Number(pk.row) === r && Number(pk.col) === c;
-    hb += `<rect x="${56 + c * 45.3}" y="${250 + r * 38}" width="40" height="33" rx="7" fill="${isPk ? C.magenta : C.paper}" fill-opacity="${isPk ? 1 : v ? 0.1 + 0.9 * Math.sqrt(v / hmax) : 0.03}"/>`;
+    hb += `<rect x="${56 + c * 45.3}" y="${250 + r * 38}" width="40" height="33" rx="7" fill="${isPk ? C.magenta : C.paper}" fill-opacity="${isPk ? 1 : v ? 0.05 + 0.95 * Math.pow(v / hmax, 1.1) : 0.03}"/>`;
   }
   add('heat-view', ['When it', 'happens.'], hb);
 
