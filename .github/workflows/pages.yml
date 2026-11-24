@@ -19,7 +19,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,6 +29,12 @@ jobs:
       - id: pages
         uses: actions/configure-pages@v5
       - run: npm ci
+      - name: Restore the per-task detail cache (completed tasks never change)
+        uses: actions/cache@v4
+        with:
+          path: data/cache
+          key: pulse-details-${{ github.run_id }}
+          restore-keys: pulse-details-
       - name: Fetch the API and build the site
         run: npm run build -- --fetch --base "${{ steps.pages.outputs.base_url }}/"
         env:

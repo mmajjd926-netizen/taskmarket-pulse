@@ -4,6 +4,7 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { derive } from './derive.mjs';
+import { completedDetails } from './details.mjs';
 
 export const API = process.env.TASKMARKET_API || 'https://api.taskmarket.dev';
 export const CHAINS = [
@@ -20,6 +21,12 @@ async function get(path, tries = 4) {
   for (let i = 1; ; i++) {
     try {
       const r = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'taskmarket-pulse (+github)' }, signal: AbortSignal.timeout(30000) });
+      if (r.status === 429) {
+        const wait = Math.min(60, Number(r.headers.get('retry-after')) || 5 * i);
+        if (i >= tries + 2) throw new Error('429 Too Many Requests');
+        await new Promise((res) => setTimeout(res, wait * 1000));
+        continue;
+      }
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
       return await r.json();
     } catch (e) {
@@ -71,7 +78,10 @@ async function chainSnapshot(c) {
     open: !!t.submissionWindowOpen, phase: t.phase || null,
     title: String(t.description || '').split('\n')[0].slice(0, 140),
   }));
-  return { ...c, stats, breakdowns, series, heatmap, feed: feed.filter((f) => !f.chainId || f.chainId === c.id), tasks: slim };
+  const det = await completedDetails(c.key, slim, get);
+  console.log(`${c.name}: details for ${det.cached} of ${det.completed} completed tasks (${det.fetched} fetched now, ${det.failed} failed)`);
+  return { ...c, stats, breakdowns, series, heatmap, feed: feed.filter((f) => !f.chainId || f.chainId === c.id), tasks: slim,
+    details: det.details, detailsMeta: { cached: det.cached, completed: det.completed } };
 }
 
 export async function fetchSnapshot() {

@@ -60,33 +60,68 @@ export function derive(c, asOf) {
     lorenz, top: posters.slice(0, 10).map((p) => ({ ...p, reward: round(p.reward), paid: round(p.paid) })),
   };
 
-  // Money flow: reward of completed tasks, from the poster to the primary award winner.
-  const done = tasks.filter((t) => t.status === 'completed' && t.winner);
-  const posterPaid = new Map(), winnerGot = new Map(), winnerTasks = new Map();
+  // Money flow: what completed tasks paid, from the poster to each winner. Uses the task's awards
+  // (/api/tasks/<id>: awards[].workerPayment) when fetched, else the reward credited to primaryAward.
+  const det = c.details || {};
+  const done = tasks.filter((t) => t.status === 'completed' && (t.winner || det[t.id]?.a?.length));
+  const pays = []; // [poster, winner, amount, taskId]
   for (const t of done) {
-    const v = units(t.reward);
-    posterPaid.set(t.requester, (posterPaid.get(t.requester) || 0) + v);
-    winnerGot.set(t.winner, (winnerGot.get(t.winner) || 0) + v);
-    winnerTasks.set(t.winner, (winnerTasks.get(t.winner) || 0) + 1);
+    const d = det[t.id];
+    if (d && d.a.length) for (const [w, pay] of d.a) pays.push([t.requester, w, units(pay), t.id]);
+    else pays.push([t.requester, t.winner, units(t.reward), t.id]);
+  }
+  const posterPaid = new Map(), winnerGot = new Map(), winnerTasks = new Map();
+  for (const [p, w, v] of pays) {
+    posterPaid.set(p, (posterPaid.get(p) || 0) + v);
+    winnerGot.set(w, (winnerGot.get(w) || 0) + v);
+    winnerTasks.set(w, (winnerTasks.get(w) || 0) + 1);
   }
   const topP = [...posterPaid.entries()].sort((a, b) => b[1] - a[1]).slice(0, 7).map((e) => e[0]);
   const topW = [...winnerGot.entries()].sort((a, b) => b[1] - a[1]).slice(0, 9).map((e) => e[0]);
   const linkMap = new Map();
-  for (const t of done) {
-    const s = topP.includes(t.requester) ? t.requester : 'others';
-    const d = topW.includes(t.winner) ? t.winner : 'others';
-    const k = s + '>' + d;
-    linkMap.set(k, (linkMap.get(k) || 0) + units(t.reward));
+  for (const [p, w, v] of pays) {
+    const k = (topP.includes(p) ? p : 'others') + '>' + (topW.includes(w) ? w : 'others');
+    linkMap.set(k, (linkMap.get(k) || 0) + v);
   }
-  const flowTotal = done.reduce((s, t) => s + units(t.reward), 0);
+  const flowTotal = pays.reduce((s, x) => s + x[2], 0);
   const flow = {
-    total: round(flowTotal), tasks: done.length, winners: winnerGot.size, payers: posterPaid.size,
+    total: round(flowTotal), tasks: done.length, awards: pays.length, fromAwards: done.filter((t) => det[t.id]?.a?.length).length,
+    winners: winnerGot.size, payers: posterPaid.size,
     sources: [...topP.map((a) => ({ id: a, name: byPoster.get(a)?.name || null, value: round(posterPaid.get(a)) })),
       { id: 'others', name: null, value: round(flowTotal - topP.reduce((s, a) => s + posterPaid.get(a), 0)) }],
     targets: [...topW.map((a) => ({ id: a, value: round(winnerGot.get(a)), tasks: winnerTasks.get(a) })),
-      { id: 'others', value: round(flowTotal - topW.reduce((s, a) => s + winnerGot.get(a), 0)), tasks: done.filter((t) => !topW.includes(t.winner)).length }],
+      { id: 'others', value: round(flowTotal - topW.reduce((s, a) => s + winnerGot.get(a), 0)), tasks: pays.filter((x) => !topW.includes(x[1])).length }],
     links: [...linkMap.entries()].map(([k, v]) => ({ source: k.split('>')[0], target: k.split('>')[1], value: round(v) })),
     topWinnerShare: flowTotal ? winnerGot.get(topW[0]) / flowTotal : 0,
+  };
+
+  // Decisions: how fast entries arrive, how long posters take to pay, whether early entries win.
+  const dec = [];
+  for (const t of done) {
+    const d = det[t.id];
+    if (!d || !d.a.length) continue;
+    const settled = d.a.map((a) => a[2]).filter(Boolean).map((x) => new Date(x).getTime());
+    if (!settled.length) continue;
+    const payout = (Math.min(...settled) - new Date(d.c).getTime()) / 1000;
+    const pos = d.a[0][3] != null && d.s.length >= 4 ? d.s.findIndex((x) => x >= d.a[0][3]) / d.s.length : null;
+    dec.push({ t, d, payout, first: d.s.length ? d.s[0] : null, atDecision: d.s.filter((x) => x <= payout).length, pos });
+  }
+  const H = 3600;
+  const payoutBuckets = [['< 1 h', 0, H], ['1–6 h', H, 6 * H], ['6–24 h', 6 * H, 24 * H], ['1–3 days', 24 * H, 72 * H], ['3–7 days', 72 * H, 168 * H], ['> 7 days', 168 * H, Infinity]]
+    .map(([l, lo, hi]) => ({ label: l, n: dec.filter((x) => x.payout >= lo && x.payout < hi).length }));
+  const withPos = dec.filter((x) => x.pos != null);
+  const quart = [0, 1, 2, 3].map((q) => ({ q, n: withPos.filter((x) => Math.min(3, Math.floor(x.pos * 4)) === q).length }));
+  const single = withPos.filter((x) => x.d.a.length === 1);
+  const singleFirstQ = single.length ? single.filter((x) => x.pos < 0.25).length / single.length : null;
+  const races = dec.filter((x) => x.d.s.length >= 12).sort((a, b) => b.t.createdAt.localeCompare(a.t.createdAt)).slice(0, 6)
+    .map((x) => ({ ref: x.t.ref, id: x.t.id, title: x.t.title, reward: units(x.t.reward), entries: x.d.s.slice(0, 400), n: x.d.s.length,
+      wins: x.d.a.map((a) => a[3]).filter((v) => v != null), payout: Math.round(x.payout), winners: x.d.a.length }));
+  const decisions = {
+    n: dec.length, completed: done.length,
+    medianFirstEntryMin: round(median(dec.filter((x) => x.first != null).map((x) => x.first)) / 60, 1),
+    medianPayoutH: round(median(dec.map((x) => x.payout)) / H, 1),
+    medianAtDecision: median(dec.map((x) => x.atDecision)),
+    payoutBuckets, quartiles: quart, withPos: withPos.length, single: single.length, singleFirstQ, races,
   };
 
   // Where the swarm is: open tasks by number of entries.
@@ -130,7 +165,7 @@ export function derive(c, asOf) {
 
   const bdTotal = (c.breakdowns?.status || []).reduce((s, x) => s + x.count, 0);
   return {
-    postersPerWeek, concentration, flow, swarm, liveTotals, status, died, diedReward, ignored, competition, growth,
+    postersPerWeek, concentration, flow, decisions, swarm, liveTotals, status, died, diedReward, ignored, competition, growth,
     peak: peak ? { day: Number(peak.row), hour: Number(peak.col), count: peak.count } : null,
     coverage: { listed: tasks.length, breakdownTotal: bdTotal },
   };

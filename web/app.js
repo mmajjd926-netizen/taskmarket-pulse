@@ -179,10 +179,51 @@
         ${S.map((n) => `<rect x="${x0}" y="${n.y}" width="${nodeW}" height="${n.h}" rx="3" fill="${C.paper}" data-tip="<b>${money(n.value)} ${c.token}</b><br>${esc(n.name || short(n.id))}"/>${label(n, 'l')}`).join('')}
         ${T.map((n) => `<rect x="${x1}" y="${n.y}" width="${nodeW}" height="${n.h}" rx="3" fill="${C.paper}" data-tip="<b>${money(n.value)} ${c.token}</b><br>${esc(short(n.id))} · ${n.tasks} wins"/>${label(n, 'r')}`).join('')}
       </svg>`;
-      $('#flow-note').innerHTML = `${fmt(f.tasks)} completed tasks in the ${c.name} task list moved <b class="mono">${money(f.total)} ${c.token}</b> from ${fmt(f.payers)} posters to ${fmt(f.winners)} winners. Each task's reward is credited to its primary award (<code>primaryAward.workerAddress</code>); bounties that split the pool among several winners are shown under the primary one. The top flow is highlighted. Names are the display names the API returns; winners are shown by address only.`;
+      $('#flow-note').innerHTML = `${fmt(f.tasks)} completed tasks in the ${c.name} task list moved <b class="mono">${money(f.total)} ${c.token}</b> from ${fmt(f.payers)} posters to ${fmt(f.winners)} winners. Amounts are what each winner was paid (<code>awards[].workerPayment</code> from <code>/api/tasks/&lt;id&gt;</code>, ${fmt(f.fromAwards)} of ${fmt(f.tasks)} tasks; the rest by <code>primaryAward</code> and the task reward), so pools split among several winners show every winner. The top flow is highlighted. Names are the display names the API returns; winners are shown by address only.`;
       void avail;
     }
     seg($('#flow-chain'), D.chains.map((c) => [c.key, c.name]), chain, (v) => { chain = v; draw(); });
+    draw();
+  })();
+
+  // ---------- Decisions ----------
+  (function decisions() {
+    let chain = 'tempo';
+    const dur = (sec) => (sec < 3600 ? fmt(sec / 60, 0) + ' min' : sec < 172800 ? fmt(sec / 3600, 1) + ' h' : fmt(sec / 86400, 1) + ' days');
+    function draw() {
+      const c = chainByKey[chain], k = c.derived.decisions;
+      if (!k || !k.n) { $('#decide-kpis').innerHTML = '<p class="note">Not enough completed tasks with award data yet.</p>'; return; }
+      const firstQ = k.withPos ? k.quartiles[0].n / k.withPos : 0;
+      $('#decide-kpis').innerHTML = [
+        [dur(k.medianFirstEntryMin * 60), 'median wait for the first entry'],
+        [dur(k.medianPayoutH * 3600), 'median time from posting to the first payout'],
+        [fmt(k.medianAtDecision), 'median entries in by the time of the payout'],
+        [pct(firstQ), 'of winning entries came in the first quarter of arrivals'],
+      ].map(([v, l], i) => `<div class="panel kpi"><div class="v" ${i === 3 ? 'style="color:var(--magenta)"' : ''}>${v}</div><div class="l">${l}</div></div>`).join('');
+      const maxB = Math.max(...k.payoutBuckets.map((b) => b.n), 1);
+      $('#decide-payout').innerHTML = k.payoutBuckets.map((b) => `<div style="display:grid;grid-template-columns:80px 1fr 50px;gap:10px;align-items:center;margin:8px 0" data-tip="<b>${fmt(b.n)}</b> tasks paid ${b.label} after posting">
+        <span style="font-size:13px">${b.label}</span><span style="height:14px;border-radius:4px;background:${C.cream};opacity:.85;width:${(b.n / maxB) * 100}%"></span><span style="font-family:var(--mono);text-align:right;font-size:13px">${fmt(b.n)}</span></div>`).join('');
+      const labels = ['First quarter', 'Second quarter', 'Third quarter', 'Last quarter'];
+      $('#decide-early').innerHTML = k.quartiles.map((q, i) => `<div style="display:grid;grid-template-columns:110px 1fr 50px;gap:10px;align-items:center;margin:8px 0" data-tip="<b>${fmt(q.n)}</b> of ${fmt(k.withPos)} winning entries">
+        <span style="font-size:13px">${labels[i]}</span><span style="position:relative;height:14px;border-radius:4px;background:${i === 0 ? C.magenta : C.salmon};opacity:${i === 0 ? 1 : 0.75};width:${k.withPos ? (q.n / k.withPos) * 100 : 0}%"></span><span style="font-family:var(--mono);text-align:right;font-size:13px">${pct(k.withPos ? q.n / k.withPos : 0)}</span></div>`).join('') +
+        `<p class="note">Where the primary winning entry sat in the order of arrival, for ${fmt(k.withPos)} completed tasks with at least 4 entries. If order did not matter, each quarter would hold about 25%.${k.single ? ` Pools that pay many entrants lift this; on the ${fmt(k.single)} tasks with a single winner, ${pct(k.singleFirstQ)} of winners entered in the first quarter.` : ''}</p>`;
+      // Race strips (log time axis)
+      const W = 1000, Hs = 54, L = 300;
+      $('#decide-races').innerHTML = k.races.map((r) => {
+        const tMax = Math.max(r.payout, ...r.entries, 3600) * 1.15, tMin = 30;
+        const X = (sec) => L + ((Math.log(Math.max(sec, tMin)) - Math.log(tMin)) / (Math.log(tMax) - Math.log(tMin))) * (W - L - 10);
+        let g = `<line x1="${L}" x2="${W - 10}" y1="${Hs / 2}" y2="${Hs / 2}" stroke="${C.line}"/>`;
+        r.entries.forEach((e, i) => { g += `<rect x="${X(e) - 2.5}" y="${Hs / 2 - 9 + (i % 4) * 4.5}" width="5" height="5" rx="1.2" fill="${C.paper}" fill-opacity=".7"/>`; });
+        r.wins.forEach((w) => { g += `<rect x="${X(w) - 4}" y="${Hs / 2 - 6}" width="9" height="9" rx="2" fill="${C.magenta}" data-tip="winning entry, ${dur(w)} after posting"/>`; });
+        g += `<line x1="${X(r.payout)}" x2="${X(r.payout)}" y1="6" y2="${Hs - 6}" stroke="${C.salmon}" stroke-width="2"/><text class="mono" x="${X(r.payout) - 6}" y="12" text-anchor="end" style="font-size:10px;fill:${C.salmon}">paid after ${dur(r.payout)}</text>`;
+        g += `<text x="0" y="${Hs / 2 - 3}" style="font-size:12.5px;fill:${C.cream}">${esc(r.title.slice(0, 44))}${r.title.length > 44 ? '…' : ''}</text>
+          <text class="mono" x="0" y="${Hs / 2 + 13}" style="font-size:10.5px">${esc(r.ref)} · ${money(r.reward)} ${c.token} · ${fmt(r.n)} entries · ${r.winners} paid</text>`;
+        return `<a href="https://taskmarket.dev/tasks/${esc(r.id)}?chain=${c.id}" target="_blank" rel="noopener" style="display:block;text-decoration:none"><svg viewBox="0 0 ${W} ${Hs}" style="min-width:560px">${g}</svg></a>`;
+      }).join('<div style="height:6px"></div>') + `<div style="display:flex;justify-content:space-between;padding-left:30%;font-family:var(--mono);font-size:10.5px;color:var(--muted)"><span>1 min</span><span>→ later</span></div>`;
+      $('#decide-races').style.overflowX = 'auto';
+      $('#decide-note').innerHTML = `Computed from ${fmt(k.n)} of ${fmt(k.completed)} completed ${c.name} tasks, using <code>/api/tasks/&lt;id&gt;</code> (<code>awards[].settledAt</code>, <code>workerPayment</code>, <code>submissionId</code>) and <code>/api/tasks/&lt;id&gt;/submissions</code> (<code>submittedAt</code>). A completed task never changes, so each is fetched once and cached; new ones are added on every build. The race strips are the 6 newest completed tasks with at least 12 entries.`;
+    }
+    seg($('#decide-chain'), D.chains.map((c) => [c.key, c.name]), chain, (v) => { chain = v; draw(); });
     draw();
   })();
 

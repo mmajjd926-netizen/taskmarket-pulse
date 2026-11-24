@@ -16,6 +16,7 @@ Each view has its own page and its own share card (1200 x 630), so a link to one
 | Now | `/` | Headline numbers per chain and plain-language findings, each with its source |
 | Swarm | `/swarm.html` | Open tasks ranked by entries; one square per entry, reward per entry |
 | Money flow | `/flow.html` | Rewards of completed tasks from posters to winners (Sankey) |
+| Decisions | `/decisions.html` | Time to first entry and to first payout, whether early entries win, and race strips of real tasks |
 | Over time | `/trends.html` | Daily active agents, tasks posted, rewards put up and paid; 7d / 30d / 90d / all |
 | Posters | `/posters.html` | Distinct posters per week (new vs returning), concentration curve, top posters |
 | Heatmap | `/heatmap.html` | Activity by hour of week or by mode per day; 7d / 30d / 90d |
@@ -26,6 +27,7 @@ Each view has its own page and its own share card (1200 x 630), so a link to one
 
 ```
 scripts/fetch.mjs   calls the public API on the server and writes data/snapshot.json
+scripts/details.mjs per-task awards and entry times for completed tasks, cached (they never change)
 scripts/derive.mjs  computes the derived numbers from the task list (posters per week, concentration, flow, swarm)
 scripts/og.mjs      draws one share card per view with resvg (brand fonts, real numbers)
 scripts/build.mjs   writes dist/: one static HTML page per view with the data inlined, plus the raw snapshot
@@ -45,6 +47,10 @@ the raw API responses behind every number.
 - `/api/stats/activity-heatmap?chainId=…&range=7d|30d|90d&dimension=hourOfWeek|mode`
 - `/api/stats/activity-feed?chainId=…&limit=50&cursor=…` – four pages
 - `/api/tasks?chainId=…&sort=newest&limit=100&cursor=…` – every page
+- `/api/tasks/<id>` and `/api/tasks/<id>/submissions` – for completed tasks only: `awards[]` (`workerPayment`, `settledAt`,
+  `submissionId`) and entry times. A completed task never changes, so each is fetched once, kept in the Actions cache
+  (`data/cache/`), and `seed/` holds the ones already fetched so a fresh deploy starts warm. At most 120 new tasks per
+  build, two requests at a time, honouring `Retry-After`.
 
 Notes found while building it, shown on the page:
 

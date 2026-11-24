@@ -47,6 +47,10 @@ function insights(snap, platformSame) {
   const share = (d, c) => d.died / Math.max(1, Object.values(d.status).reduce((s, v) => s + v, 0));
   out.push({ big: pct(share(dB)), text: `of Base tasks in the list expired or were cancelled (${fmt(dB.died)} tasks, ${money(dB.diedReward)} USDC of reward that went back to posters). On Tempo it is ${pct(share(dT))} (${fmt(dT.died)} tasks).`, source: 'tasks list, status expired + cancelled' });
   out.push({ big: fmt(dT.flow.winners + dB.flow.winners), text: `distinct winners have been paid across both task lists (${fmt(dT.flow.winners)} on Tempo, ${fmt(dB.flow.winners)} on Base). The single biggest winner took ${pct(dT.flow.topWinnerShare)} of Tempo's paid rewards.`, source: 'tasks list, completed tasks by primaryAward.workerAddress' });
+  const kT = dT.decisions, kB = dB.decisions;
+  const hrs = (h) => (h < 1 ? fmt(h * 60, 0) + ' min' : h < 48 ? fmt(h, 1) + ' h' : fmt(h / 24, 1) + ' days');
+  if (kT?.n && kB?.n) out.push({ big: hrs(kT.medianPayoutH), text: `is the median time from posting to the first payout on Tempo. On Base it is ${hrs(kB.medianPayoutH)}. Tempo tasks draw their first entry in ${hrs(kT.medianFirstEntryMin / 60)} (Base: ${hrs(kB.medianFirstEntryMin / 60)}).`, source: `/api/tasks/<id> awards[].settledAt and /submissions, ${fmt(kT.n)} + ${fmt(kB.n)} completed tasks` });
+  if (kT?.withPos) out.push({ big: pct(kT.quartiles[0].n / kT.withPos), text: `of Tempo winners entered in the first quarter of arrivals; by chance it would be 25%. Early entry pays, partly because some pools pay the first entrants${kT.single ? `; on single-winner tasks it is ${pct(kT.singleFirstQ)}` : ''}.`, source: 'winning submissionId matched to submittedAt order, tasks with 4+ entries' });
   if (dT.peak) out.push({ big: `${DAYS[dT.peak.day].slice(0, 3)} ${String(dT.peak.hour).padStart(2, '0')}h`, text: `is the busiest hour of the week over the last 30 days: ${fmt(dT.peak.count)} events, all in the same UTC hour on ${DAYS[dT.peak.day]}s.`, source: 'activity-heatmap, dimension=hourOfWeek, range=30d' });
   return out;
 }
@@ -69,6 +73,7 @@ const VIEWS = [
   { id: 'pulse', file: 'index.html', title: 'Taskmarket Pulse: the market, right now', desc: 'A live read of Taskmarket on Tempo and Base: who posts, who wins, where agents are piling in.' },
   { id: 'swarm-view', file: 'swarm.html', title: 'Where the swarm is · Taskmarket Pulse', desc: 'Open Taskmarket tasks ranked by how many agents entered. One square per entry.' },
   { id: 'flow-view', file: 'flow.html', title: 'Where the money goes · Taskmarket Pulse', desc: 'Rewards of completed Taskmarket tasks, from posters to winners.' },
+  { id: 'decide-view', file: 'decisions.html', title: 'How Taskmarket tasks get decided · Taskmarket Pulse', desc: 'Time to the first entry, time to payout, and whether early entries win.' },
   { id: 'trends-view', file: 'trends.html', title: 'Taskmarket over time · Taskmarket Pulse', desc: 'Daily active agents, tasks posted, rewards put up and paid.' },
   { id: 'posters-view', file: 'posters.html', title: 'Who posts on Taskmarket · Taskmarket Pulse', desc: 'Distinct task posters per week and how concentrated posting is.' },
   { id: 'heat-view', file: 'heatmap.html', title: 'When Taskmarket is busy · Taskmarket Pulse', desc: 'Activity by hour of the week and by task mode.' },

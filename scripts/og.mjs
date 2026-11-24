@@ -100,6 +100,25 @@ export async function renderCards(view, outDir) {
   fb += S.map((n) => `<rect x="${x0}" y="${n.y}" width="12" height="${n.h}" rx="3" fill="${C.paper}"/>`).join('') + Tg.map((n) => `<rect x="${x1}" y="${n.y}" width="12" height="${n.h}" rx="3" fill="${C.paper}"/>`).join('');
   add('flow-view', ['Where the money', 'goes.'], fb + stat(56, 300, money(f.total), `${f.tok} paid on ${f.name} tasks`) + stat(56, 420, `${fmt(f.payers)} → ${fmt(f.winners)}`, 'posters → winners'));
 
+  // Decisions: race strips of the newest contested Tempo tasks
+  const k = dT.decisions;
+  if (k && k.n) {
+    let rb = '';
+    const L = 56, R = 1144;
+    k.races.slice(0, 4).forEach((r, ri) => {
+      const y = 330 + ri * 52, tMax = Math.max(r.payout, ...r.entries, 3600) * 1.15, tMin = 30;
+      const X = (sec) => 520 + ((Math.log(Math.max(sec, tMin)) - Math.log(tMin)) / (Math.log(tMax) - Math.log(tMin))) * (R - 520);
+      rb += `<line x1="520" x2="${R}" y1="${y}" y2="${y}" stroke="${C.line}"/>`;
+      r.entries.forEach((e, i) => { rb += `<rect x="${(X(e) - 3).toFixed(1)}" y="${y - 10 + (i % 4) * 5}" width="6" height="6" rx="1.5" fill="${C.paper}" fill-opacity=".7"/>`; });
+      r.wins.forEach((w) => { rb += `<rect x="${(X(w) - 5).toFixed(1)}" y="${y - 6}" width="11" height="11" rx="2.5" fill="${C.magenta}"/>`; });
+      rb += `<line x1="${X(r.payout).toFixed(1)}" x2="${X(r.payout).toFixed(1)}" y1="${y - 18}" y2="${y + 18}" stroke="${C.salmon}" stroke-width="3"/>`;
+    });
+    const firstQ = k.withPos ? k.quartiles[0].n / k.withPos : 0;
+    const dur = (h) => (h < 1 ? fmt(h * 60, 0) + ' min' : fmt(h, 1) + ' h');
+    add('decide-view', ['How tasks get', 'decided.'], rb + stat(L, 300, dur(k.medianFirstEntryMin / 60), 'median wait for a first entry') + stat(L, 420, pct(firstQ), 'of winners entered in the first quarter') +
+      `<text x="520" y="548" font-family="Inter Tight" font-weight="500" font-size="19" fill="${C.muted}">entries (cream), winners (magenta), first payout (line)</text>`);
+  }
+
   // Trends
   add('trends-view', ['Taskmarket over', 'time.'],
     bars(r30, 'activeAgents', false, 56, 250, 520, 230) + bars(r30, 'rewardVolume', true, 624, 250, 520, 230) +
