@@ -59,9 +59,10 @@
   (function headline() {
     const el = $('#headline');
     const keys = [['openTasks', 'Open tasks'], ['activeAgents7d', 'Active agents, 7d'], ['activeWorkers7d', 'Active workers, 7d'], ['paidWorkers', 'Paid workers'], ['activeWallets', 'Active wallets'], ['registeredWorkers', 'Registered workers']];
-    let h = `<div class="h"></div>` + keys.map(([, l], i) => `<div class="h ${i > 1 ? 'hide-m' : ''}">${l}</div>`).join('');
+    let h = '';
     for (const c of D.chains) {
-      h += `<div class="c">${c.name} <span class="tag ${c.key}">${c.token}</span></div>` + keys.map(([k], i) => `<div class="n ${i > 1 ? 'hide-m' : ''}" data-tip="<b>${fmt(c.stats[k])}</b> ${k}<br>/api/market/stats?chainId=${c.id}">${fmt(c.stats[k])}</div>`).join('');
+      h += `<div class="chaincard"><div class="c">${c.name} <span class="tag ${c.key}">${c.token} · chainId ${c.id}</span></div><div class="kgrid">` +
+        keys.map(([k, l]) => `<div class="kpi" data-tip="<b>${fmt(c.stats[k])}</b> · ${k}<br>/api/market/stats?chainId=${c.id}"><div class="v">${fmt(c.stats[k])}</div><div class="l">${l}</div></div>`).join('') + '</div></div>';
     }
     el.innerHTML = h;
     const same = keys.filter(([k]) => D.chains.every((c) => c.stats[k] === D.chains[0].stats[k])).map(([, l]) => l.toLowerCase());

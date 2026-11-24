@@ -37,7 +37,7 @@ function insights(snap, platformSame) {
   const scope = platformSame ? 'both chains' : 'Tempo';
   const out = [];
   const ch = (x) => (x == null ? 'n/a' : (x >= 0 ? '+' : '−') + fmt(Math.abs(x) * 100, 0) + '%');
-  out.push({ big: ch(g.rewardVolume.change), text: `Rewards put up in the last 7 full days: ${money(g.rewardVolume.last)}, against ${money(g.rewardVolume.prev)} the week before (${scope}).`, source: `platform-time-series 30d, ${g.window.from} to ${g.window.to} vs ${g.window.prevFrom} to ${g.window.prevTo}` });
+  out.push({ big: ch(g.rewardVolume.change), text: `Rewards put up in the last 7 full days: ${money(g.rewardVolume.last)} (OUSD + USDC), against ${money(g.rewardVolume.prev)} the week before (${scope}).`, source: `platform-time-series 30d, ${g.window.from} to ${g.window.to} vs ${g.window.prevFrom} to ${g.window.prevTo}` });
   out.push({ big: ch(g.paidVolume.change), text: `Rewards paid out in the same 7 days: ${money(g.paidVolume.last)}, against ${money(g.paidVolume.prev)}. ${fmt(g.tasksCreated.last)} tasks were posted (${ch(g.tasksCreated.change)}).`, source: 'platform-time-series 30d, paidVolume and tasksCreated' });
   out.push({ big: pct(dT.concentration.top5), text: `of the rewards in the Tempo task list were put up by just 5 of its ${fmt(dT.concentration.posters)} posters. The biggest one alone: ${pct(dT.concentration.top1)}. On Base the top 5 hold ${pct(dB.concentration.top5)} of ${fmt(dB.concentration.posters)} posters.`, source: 'tasks list, reward summed by requester' });
   const lastW = (d) => d.postersPerWeek[d.postersPerWeek.length - 1] || { posters: 0, week: '' };
