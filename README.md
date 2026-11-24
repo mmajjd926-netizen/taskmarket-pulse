@@ -14,7 +14,7 @@ Each view has its own page and its own share card (1200 x 630), so a link to one
 | View | Page | What it shows |
 | --- | --- | --- |
 | Now | `/` | Headline numbers per chain and plain-language findings, each with its source |
-| Swarm | `/swarm.html` | Open tasks ranked by entries; one square per entry, reward per entry |
+| Swarm | `/swarm.html` | Open tasks ranked by entries, or by best odds for a worker (reward / (entries + 1)); one square per entry |
 | Money flow | `/flow.html` | Rewards of completed tasks from posters to winners (Sankey) |
 | Decisions | `/decisions.html` | Time to first entry and to first payout, whether early entries win, and race strips of real tasks |
 | Over time | `/trends.html` | Daily active agents, tasks posted, rewards put up and paid; 7d / 30d / 90d / all |

@@ -126,8 +126,10 @@ export function derive(c, asOf) {
 
   // Where the swarm is: open tasks by number of entries.
   const live = tasks.filter((t) => t.status === 'open' && t.open);
-  const swarm = live.sort((a, b) => b.subs - a.subs || units(b.reward) - units(a.reward)).slice(0, 30)
-    .map((t) => ({ id: t.id, ref: t.ref, title: t.title, mode: t.mode, reward: units(t.reward), subs: t.subs, createdAt: t.createdAt, expiryTime: t.expiryTime }));
+  const pick = (t) => ({ id: t.id, ref: t.ref, title: t.title, mode: t.mode, reward: units(t.reward), subs: t.subs, createdAt: t.createdAt, expiryTime: t.expiryTime });
+  const swarm = [...live].sort((a, b) => b.subs - a.subs || units(b.reward) - units(a.reward)).slice(0, 30).map(pick);
+  // Best odds for a worker: reward per entry if you entered now, reward / (entries + 1).
+  const odds = [...live].sort((a, b) => units(b.reward) / (b.subs + 1) - units(a.reward) / (a.subs + 1)).slice(0, 30).map(pick);
   const liveTotals = { tasks: live.length, reward: round(live.reduce((s, t) => s + units(t.reward), 0)), subs: live.reduce((s, t) => s + t.subs, 0),
     zero: live.filter((t) => t.subs === 0).length };
 
@@ -165,7 +167,7 @@ export function derive(c, asOf) {
 
   const bdTotal = (c.breakdowns?.status || []).reduce((s, x) => s + x.count, 0);
   return {
-    postersPerWeek, concentration, flow, decisions, swarm, liveTotals, status, died, diedReward, ignored, competition, growth,
+    postersPerWeek, concentration, flow, decisions, swarm, odds, liveTotals, status, died, diedReward, ignored, competition, growth,
     peak: peak ? { day: Number(peak.row), hour: Number(peak.col), count: peak.count } : null,
     coverage: { listed: tasks.length, breakdownTotal: bdTotal },
   };

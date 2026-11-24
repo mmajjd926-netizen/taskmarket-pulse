@@ -99,3 +99,8 @@ footer .made{color:var(--cream)}
 .mosaic figcaption{color:var(--muted);font-size:12.5px;margin-top:8px}
 .mosaic figcaption b{color:var(--cream);font-weight:600}
 @media (max-width:860px){.herogrid{grid-template-columns:minmax(0,1fr)}}
+
+#decide-races .ar{opacity:0}
+#decide-races.play .ar{animation:arrive .35s ease-out forwards}
+@keyframes arrive{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){#decide-races .ar{opacity:1;animation:none}}

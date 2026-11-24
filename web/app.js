@@ -102,12 +102,13 @@
 
   // ---------- Swarm ----------
   (function swarm() {
-    let chain = 'tempo';
+    let chain = 'tempo', sort = 'swarm';
     const el = $('#swarm');
     function draw() {
       const d = chainByKey[chain].derived;
-      const max = Math.max(...d.swarm.map((t) => t.subs), 1);
-      el.innerHTML = d.swarm.slice(0, 24).map((t, i) => {
+      const list = sort === 'odds' ? (d.odds || []) : d.swarm;
+      const max = Math.max(...list.map((t) => t.subs), 1);
+      el.innerHTML = list.slice(0, 24).map((t, i) => {
         const n = Math.min(t.subs, 120);
         const dots = Array.from({ length: n }, () => '<i></i>').join('') + (t.subs > 120 ? `<i class="more" title="+${t.subs - 120}"></i>` : '');
         const pe = t.subs ? t.reward / t.subs : t.reward;
@@ -119,9 +120,10 @@
           <div class="pix" style="--m:${max}">${dots}</div></a>`;
       }).join('') || '<p class="note">No open tasks in the task list right now.</p>';
       const L = d.liveTotals;
-      $('#swarm-note').textContent = `${fmt(L.tasks)} open tasks in the ${chainByKey[chain].name} task list hold ${money(L.reward)} ${chainByKey[chain].token} and have drawn ${fmt(L.subs)} entries; ${fmt(L.zero)} have none yet. One square = one entry. Top 24 by entries.`;
+      $('#swarm-note').textContent = `${fmt(L.tasks)} open tasks in the ${chainByKey[chain].name} task list hold ${money(L.reward)} ${chainByKey[chain].token} and have drawn ${fmt(L.subs)} entries; ${fmt(L.zero)} have none yet. One square = one entry. ${sort === 'odds' ? 'Sorted by reward per entry if you entered now: reward / (entries + 1).' : 'Top 24 by entries.'}`;
     }
     seg($('#swarm-chain'), D.chains.map((c) => [c.key, c.name]), chain, (v) => { chain = v; draw(); });
+    seg($('#swarm-sort'), [['swarm', 'Most entries'], ['odds', 'Best odds']], sort, (v) => { sort = v; draw(); });
     draw();
   })();
 
@@ -213,14 +215,18 @@
         const tMax = Math.max(r.payout, ...r.entries, 3600) * 1.15, tMin = 30;
         const X = (sec) => L + ((Math.log(Math.max(sec, tMin)) - Math.log(tMin)) / (Math.log(tMax) - Math.log(tMin))) * (W - L - 10);
         let g = `<line x1="${L}" x2="${W - 10}" y1="${Hs / 2}" y2="${Hs / 2}" stroke="${C.line}"/>`;
-        r.entries.forEach((e, i) => { g += `<rect x="${X(e) - 2.5}" y="${Hs / 2 - 9 + (i % 4) * 4.5}" width="5" height="5" rx="1.2" fill="${C.paper}" fill-opacity=".7"/>`; });
-        r.wins.forEach((w) => { g += `<rect x="${X(w) - 4}" y="${Hs / 2 - 6}" width="9" height="9" rx="2" fill="${C.magenta}" data-tip="winning entry, ${dur(w)} after posting"/>`; });
+        const dl = (x) => (((x - L) / (W - L)) * 2.4).toFixed(2); // replay: dots appear in order of arrival
+        r.entries.forEach((e, i) => { g += `<rect class="ar" style="animation-delay:${dl(X(e))}s" x="${X(e) - 2.5}" y="${Hs / 2 - 9 + (i % 4) * 4.5}" width="5" height="5" rx="1.2" fill="${C.paper}" fill-opacity=".7"/>`; });
+        r.wins.forEach((w) => { g += `<rect class="ar" style="animation-delay:${dl(X(w))}s" x="${X(w) - 4}" y="${Hs / 2 - 6}" width="9" height="9" rx="2" fill="${C.magenta}" data-tip="winning entry, ${dur(w)} after posting"/>`; });
         g += `<line x1="${X(r.payout)}" x2="${X(r.payout)}" y1="6" y2="${Hs - 6}" stroke="${C.salmon}" stroke-width="2"/><text class="mono" x="${X(r.payout) - 6}" y="12" text-anchor="end" style="font-size:10px;fill:${C.salmon}">paid after ${dur(r.payout)}</text>`;
         g += `<text x="0" y="${Hs / 2 - 3}" style="font-size:12.5px;fill:${C.cream}">${esc(r.title.slice(0, 44))}${r.title.length > 44 ? '…' : ''}</text>
           <text class="mono" x="0" y="${Hs / 2 + 13}" style="font-size:10.5px">${esc(r.ref)} · ${money(r.reward)} ${c.token} · ${fmt(r.n)} entries · ${r.winners} paid</text>`;
         return `<a href="https://taskmarket.dev/tasks/${esc(r.id)}?chain=${c.id}" target="_blank" rel="noopener" style="display:block;text-decoration:none"><svg viewBox="0 0 ${W} ${Hs}" style="min-width:560px">${g}</svg></a>`;
       }).join('<div style="height:6px"></div>') + `<div style="display:flex;justify-content:space-between;padding-left:30%;font-family:var(--mono);font-size:10.5px;color:var(--muted)"><span>1 min</span><span>→ later</span></div>`;
       $('#decide-races').style.overflowX = 'auto';
+      const box = $('#decide-races');
+      box.classList.remove('play');
+      new IntersectionObserver((es, o) => es.forEach((e) => { if (e.isIntersecting) { box.classList.add('play'); o.disconnect(); } }), { threshold: 0.3 }).observe(box);
       $('#decide-note').innerHTML = `Computed from ${fmt(k.n)} of ${fmt(k.completed)} completed ${c.name} tasks, using <code>/api/tasks/&lt;id&gt;</code> (<code>awards[].settledAt</code>, <code>workerPayment</code>, <code>submissionId</code>) and <code>/api/tasks/&lt;id&gt;/submissions</code> (<code>submittedAt</code>). A completed task never changes, so each is fetched once and cached; new ones are added on every build. The race strips are the 6 newest completed tasks with at least 12 entries.`;
     }
     seg($('#decide-chain'), D.chains.map((c) => [c.key, c.name]), chain, (v) => { chain = v; draw(); });
