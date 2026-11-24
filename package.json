@@ -1,0 +1,20 @@
+{
+  "name": "taskmarket-pulse",
+  "version": "1.0.0",
+  "description": "A live, hosted dashboard of Taskmarket's public market data on Tempo and Base.",
+  "scripts": {
+    "fetch": "node scripts/fetch.mjs",
+    "build": "node scripts/build.mjs",
+    "start": "node server.mjs",
+    "deploy": "bash deploy.sh"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  },
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  }
+}
