@@ -61,7 +61,7 @@ svg .mono{font-family:var(--mono)}
 .feed{list-style:none;margin:0;padding:0;max-height:520px;overflow:auto}
 .feed li{display:grid;grid-template-columns:62px 92px 1fr auto;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);align-items:center;font-size:13px}
 .feed .ago{font:400 12px/1 var(--mono);color:var(--muted)}
-.feed .ty{font:600 12px/1 var(--sans)}
+.feed .ty{font:600 12px/1.2 var(--sans);display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px}
 .feed .ti{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--cream)}
 .feed .ac{font:400 12px/1 var(--mono);color:var(--muted)}
 @media (max-width:620px){.feed li{grid-template-columns:52px 1fr auto}.feed .ac{display:none}}
