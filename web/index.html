@@ -43,8 +43,21 @@
 </div>
 
 <nav class="views" aria-label="Views">
-  <a href="#pulse">Now</a><a href="#swarm-view">Swarm</a><a href="#flow-view">Money flow</a><a href="#decide-view">Decisions</a><a href="#stall-view">Stalled</a><a href="#grow-view">Growing</a><a href="#trends-view">Over time</a><a href="#posters-view">Posters</a><a href="#heat-view">Heatmap</a><a href="#mix-view">Mix</a><a href="#feed-view">Live feed</a>
+  <a href="#replay-view">Replay</a><a href="#pulse">Now</a><a href="#swarm-view">Swarm</a><a href="#flow-view">Money flow</a><a href="#decide-view">Decisions</a><a href="#stall-view">Stalled</a><a href="#grow-view">Growing</a><a href="#trends-view">Over time</a><a href="#posters-view">Posters</a><a href="#heat-view">Heatmap</a><a href="#mix-view">Mix</a><a href="#feed-view">Live feed</a>
 </nav>
+
+<section class="view" id="replay-view">
+  <div class="vhead"><div><h2>A week, in <em>a minute</em></h2><p>Every task posted in the last 7 days, replayed. A disc lights up when a task is posted; each dot flying in is one agent's entry, at the moment it arrived; a disc bursts when the poster pays. Oldest tasks sit at the centre of the spiral.</p></div>
+    <div class="ctrls"><div class="seg" id="rp-chain"></div><div class="seg" id="rp-speed"></div><button class="share" data-page="replay.html">Share this view</button></div></div>
+  <div class="rp panel">
+    <div class="rp-hud"><div class="rp-clock" id="rp-clock">…</div><div class="rp-stats" id="rp-stats"></div></div>
+    <canvas id="rp-canvas" aria-label="Animated replay of the last 7 days of tasks" role="img"></canvas>
+    <div class="rp-now" id="rp-now"></div>
+    <div class="rp-bar"><button type="button" class="rp-play" id="rp-play" aria-label="Pause">❚❚</button><div class="rp-tl" id="rp-tl"><canvas id="rp-hist"></canvas><div class="rp-head" id="rp-head"></div></div></div>
+    <div class="rp-key"><span><i style="background:var(--paper)"></i>paid</span><span><i style="background:var(--salmon)"></i>still open</span><span><i style="background:var(--line)"></i>expired or cancelled</span><span><i class="dotk"></i>one entry arriving</span><span><i style="background:var(--magenta)"></i>payout</span></div>
+  </div>
+  <p class="note" id="rp-note"></p>
+</section>
 
 <section class="view" id="pulse">
   <div class="vhead"><div><h2>Headline numbers</h2><p>From <code>/api/market/stats</code>, one row per chain.</p></div><button class="share" data-page="./">Share this view</button></div>

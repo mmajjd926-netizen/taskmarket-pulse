@@ -49,7 +49,7 @@ function mosaicSvg(M, x0, y0, w, h) {
   return g;
 }
 
-export async function renderCards(view, outDir) {
+export async function renderCards(view, outDir, rp) {
   await mkdir(outDir, { recursive: true });
   const lockup = (await readFile(join(HERE, 'lockup-full.png'))).toString('base64');
   const asOf = view.asOf.replace('T', ' ').slice(0, 16);
@@ -199,6 +199,27 @@ export async function renderCards(view, outDir) {
   items.forEach((i, k) => { fd += `<text x="56" y="${285 + k * 44}" font-family="Departure Mono" font-size="20" fill="${C.muted}">${esc(i.type.replace('task_', ''))}</text>
     <text x="240" y="${285 + k * 44}" font-family="Inter Tight" font-weight="500" font-size="22" fill="${C.cream}">${esc(i.taskTitle.slice(0, 66))}${i.taskTitle.length > 66 ? '…' : ''}</text>`; });
   add('feed-view', ['Live', 'feed.'], fd);
+
+
+  // Replay: the week as a spiral, one disc per task (oldest at the centre), sized by entries.
+  if (rp && rp.tasks.length) {
+    const ts = rp.tasks;
+    const paid = ts.reduce((s, t) => s + t[5].reduce((a, p) => a + (t[0] === 0 ? p[1] : 0), 0), 0);
+    const ents = ts.reduce((s, t) => s + t[6], 0);
+    const cx = 880, cy = 335, R = 235, n = ts.length, k = R / Math.sqrt(n + 1);
+    const maxE = Math.max(...ts.map((t) => t[6]), 1);
+    let big = ts[0]; ts.forEach((t) => { if (t[6] > big[6]) big = t; });
+    let g = `<circle cx="${cx}" cy="${cy}" r="${R + 18}" fill="${C.panel}" fill-opacity=".55"/>`;
+    ts.forEach((t, i) => {
+      const r = k * Math.sqrt(i + 0.5), a = i * 2.39996;
+      const x = cx + r * Math.cos(a), y = cy + r * Math.sin(a);
+      const rad = 1.6 + 7.5 * Math.sqrt(t[6] / maxE);
+      const col = t === big ? C.magenta : t[3] === 0 ? C.paper : t[3] === 1 ? C.salmon : C.line;
+      g += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${rad.toFixed(1)}" fill="${col}" fill-opacity="${t[3] === 0 ? 0.9 : 0.75}"/>`;
+    });
+    g += stat(56, 300, fmt(n), 'tasks posted in 7 days, both chains') + stat(56, 395, fmt(ents), 'entries, both chains') + stat(56, 490, money(paid), `${T.token} paid out on Tempo`);
+    add('replay-view', ['A week in', 'a minute.'], g);
+  }
 
   const fontFiles = ['InstrumentSerif-Regular.ttf', 'InstrumentSerif-Italic.ttf', 'InterTight-Variable.ttf', 'DepartureMono-Regular.otf'].map(F);
   const out = {};

@@ -86,8 +86,33 @@ function mosaic(snap) {
   return [...days.entries()].map(([d, items]) => ({ d, items: items.sort((a, b) => a[1].localeCompare(b[1])) }));
 }
 
+// Replay: every task posted in the last 7 days, with the arrival time of each entry and each payout.
+// Entry and payout times come from /api/tasks/<id>/submissions and awards (fetched for completed tasks);
+// tasks that are still open, expired or cancelled carry their entry count only (no arrival times).
+// Task: [chain index, posted (s from window start), reward, outcome (0 paid, 1 open, 2 died), entry offsets (s after posting),
+//        payouts [[s after posting, amount, winners]], entries, ref, title, ends (s from start, deadline for died tasks or -1)]
+function replay(snap) {
+  const end = new Date(snap.asOf).getTime(), W = 7 * 86400, start = end - W * 1000;
+  const tasks = [];
+  snap.chains.forEach((c, ci) => c.tasks.forEach((t) => {
+    const p = new Date(t.createdAt).getTime();
+    if (p < start || p > end) return;
+    const d = c.details?.[t.id];
+    const paid = t.status === 'completed' && d?.a?.length;
+    const died = ['expired', 'cancelled'].includes(t.status);
+    const pays = new Map();
+    if (paid) for (const a of d.a) { const s = Math.round((new Date(a[2]).getTime() - p) / 1000); const r = pays.get(s) || [s, 0, 0]; r[1] += units(a[1]); r[2] += 1; pays.set(s, r); }
+    const ends = died && t.expiryTime ? Math.round((new Date(t.expiryTime).getTime() - start) / 1000) : -1;
+    tasks.push([ci, Math.round((p - start) / 1000), Math.round(units(t.reward) * 100) / 100, paid ? 0 : died ? 2 : 1,
+      paid ? d.s : [], [...pays.values()].map((r) => [r[0], Math.round(r[1] * 100) / 100, r[2]]), t.subs || 0, t.ref, (t.title || '').slice(0, 90), ends]);
+  }));
+  tasks.sort((a, b) => a[1] - b[1]);
+  return { asOf: snap.asOf, start: new Date(start).toISOString(), seconds: W, chains: snap.chains.map((c) => ({ key: c.key, name: c.name, token: c.token })), tasks };
+}
+
 const VIEWS = [
   { id: 'pulse', file: 'index.html', title: 'Taskmarket Pulse: the market, right now', desc: 'A live read of Taskmarket on Tempo and Base: who posts, who wins, where agents are piling in.' },
+  { id: 'replay-view', file: 'replay.html', title: 'A week of Taskmarket in a minute · Taskmarket Pulse', desc: 'Replay every task posted in the last 7 days: agents swarming in, posters picking, money paid out.' },
   { id: 'swarm-view', file: 'swarm.html', title: 'Where the swarm is · Taskmarket Pulse', desc: 'Open Taskmarket tasks ranked by how many agents entered. One square per entry.' },
   { id: 'flow-view', file: 'flow.html', title: 'Where the money goes · Taskmarket Pulse', desc: 'Rewards of completed Taskmarket tasks, from posters to winners.' },
   { id: 'decide-view', file: 'decisions.html', title: 'How Taskmarket tasks get decided · Taskmarket Pulse', desc: 'Time to the first entry, time to payout, and whether early entries win.' },
@@ -132,6 +157,8 @@ async function main() {
   for (const f of ['style.css', 'app.js']) await cp(join(ROOT, 'web', f), join(OUT, f));
   await writeFile(join(OUT, 'data/snapshot.json'), JSON.stringify(snap));
   await writeFile(join(OUT, 'data/view.json'), JSON.stringify(view));
+  const rp = replay(snap);
+  await writeFile(join(OUT, 'data/replay.json'), JSON.stringify(rp));
   await writeFile(join(OUT, '.nojekyll'), '');
 
   const tpl = await readFile(join(ROOT, 'web/index.html'), 'utf8');
@@ -144,7 +171,7 @@ async function main() {
   const safeJSON = JSON.stringify(view).replace(/</g, '\\u003c');
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
-  const cards = await renderCards(view, join(OUT, 'og'));
+  const cards = await renderCards(view, join(OUT, 'og'), rp);
   for (const v of VIEWS) {
     const url = BASE + (v.file === 'index.html' ? '' : v.file);
     const image = BASE + `og/${cards[v.id] || cards.pulse}`;

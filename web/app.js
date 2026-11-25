@@ -492,6 +492,156 @@
     $('#feed-note').innerHTML = `The newest ${fmt(items.length)} events, covering the last ${span} before the snapshot: ${Object.entries(counts).map(([k, v]) => `${fmt(v)} ${esc((TY[k] || [k])[0])}`).join(', ')}. Source: <code>/api/stats/activity-feed?limit=50</code>, four pages.`;
   })();
 
+
+  // ---------- Replay: the last 7 days, animated ----------
+  (function replayView() {
+    const sec = $('#replay-view'); if (!sec) return;
+    const cv = $('#rp-canvas'), hist = $('#rp-hist'), head = $('#rp-head'), tl = $('#rp-tl'), btn = $('#rp-play');
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let R = null, chain = D.chains[0].key, speedKey = '60', T = 0, playing = false, last = 0, visible = false, started = false;
+    let list = [], W = 1, maxE = 1, hover = null, geo = null;
+    const SPEED = { 60: 1 / 60, 20: 1 / 20 };  // share of the week per real second
+    const hash = (a, b) => { let h = 2166136261 ^ a; h = Math.imul(h ^ b, 16777619); h ^= h >>> 13; h = Math.imul(h, 2246822507); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+    const clockFmt = (t) => { const d = new Date(new Date(R.start).getTime() + t * 1000); return `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })} · ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')} UTC`; };
+
+    function pick() {
+      const ci = chain === 'all' ? null : R.chains.findIndex((c) => c.key === chain);
+      list = R.tasks.filter((t) => ci === null || t[0] === ci).map((t, i) => ({
+        ci: t[0], post: t[1], reward: t[2], out: t[3], offs: t[4], pays: t[5], subs: t[6], ref: t[7], title: t[8],
+        pay: t[5].length ? t[1] + t[5][0][0] : null, paid: t[5].reduce((s, p) => s + p[1], 0),
+        dies: t[3] === 2 ? (t[9] > 0 && t[9] < R.seconds ? t[9] : R.seconds - 1) : null, i,
+      }));
+      maxE = Math.max(1, ...list.map((t) => (t.offs.length || t.subs)));
+      drawHist(); layout();
+    }
+    function layout() {
+      const dpr = Math.min(2, devicePixelRatio || 1), w = cv.clientWidth || 600, h = cv.clientHeight || 400;
+      cv.width = w * dpr; cv.height = h * dpr;
+      const Rm = Math.max(40, Math.min(w, h) / 2 - 14), n = list.length, k = Rm / Math.sqrt(n + 1);
+      const node = Math.max(4, Math.min(16, k * 1.25));
+      list.forEach((t, j) => { const r = k * Math.sqrt(j + 0.5), a = j * 2.39996; t.x = w / 2 + r * Math.cos(a); t.y = h / 2 + r * Math.sin(a); });
+      geo = { w, h, dpr, Rm, node };
+    }
+    function drawHist() {
+      const dpr = Math.min(2, devicePixelRatio || 1), w = hist.clientWidth, h = hist.clientHeight;
+      hist.width = w * dpr; hist.height = h * dpr;
+      const g = hist.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+      const bins = new Array(168).fill(0), pb = new Array(168).fill(0);
+      list.forEach((t) => { t.offs.forEach((o) => { const b = Math.floor((t.post + o) / 3600); if (b >= 0 && b < 168) bins[b]++; }); if (t.pay != null) { const b = Math.floor(t.pay / 3600); if (b < 168) pb[b] += t.paid; } });
+      const mx = Math.max(1, ...bins), mp = Math.max(0.01, ...pb), bw = w / 168;
+      bins.forEach((v, i) => { const bh = (v / mx) * (h - 16); g.fillStyle = 'rgba(239,233,226,.42)'; g.fillRect(i * bw + 0.5, h - 14 - bh, Math.max(1, bw - 1), bh); });
+      pb.forEach((v, i) => { if (!v) return; const bh = 3 + (v / mp) * 9; g.fillStyle = C.magenta; g.fillRect(i * bw + 0.5, h - 12, Math.max(1, bw - 1), bh); });
+      g.fillStyle = C.muted; g.font = '10px "Departure Mono", monospace';
+      for (let d = 0; d < 7; d++) { const x = d * 24 * bw; g.fillRect(x, 0, 1, h - 14); const dt = new Date(new Date(R.start).getTime() + d * 86400e3); g.fillText(DAYS[dt.getUTCDay()], x + 3, 10); }
+    }
+
+    function frame(now) {
+      if (playing) { const dt = Math.min(0.1, (now - last) / 1000); T += dt * R.seconds * SPEED[speedKey]; if (T >= R.seconds) { T = R.seconds; playing = false; btn.textContent = '↻'; btn.setAttribute('aria-label', 'Replay'); } }
+      last = now; draw();
+      if (playing) requestAnimationFrame(frame);
+    }
+    function draw() {
+      const { w, h, dpr, Rm, node } = geo, g = cv.getContext('2d');
+      g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+      const flight = R.seconds * SPEED[speedKey] * 0.75, burst = R.seconds * SPEED[speedKey] * 1.1;
+      let posted = 0, put = 0, ents = 0, paid = 0, open = 0, best = null, bestN = 0;
+      const hot = 3 * 3600;
+      // faint guide ring
+      g.strokeStyle = 'rgba(69,62,55,.6)'; g.lineWidth = 1; g.beginPath(); g.arc(w / 2, h / 2, Rm + 6, 0, 7); g.stroke();
+      const dots = [];
+      for (const t of list) {
+        if (t.post > T) continue;
+        posted++; put += t.reward;
+        let n = 0, recent = 0;
+        for (let j = 0; j < t.offs.length; j++) {
+          const at = t.post + t.offs[j]; if (at > T) break;
+          n++; if (T - at < hot) recent++;
+          if (T - at < flight) dots.push([t, j, (T - at) / flight]);
+        }
+        ents += n;
+        const isPaid = t.pay != null && T >= t.pay, isDead = t.dies != null && T >= t.dies;
+        if (isPaid) paid += t.paid; else if (!isDead) open++;
+        if (recent > bestN) { bestN = recent; best = t; }
+        const timed = t.offs.length > 0;
+        const r = 1.8 + node * Math.sqrt((timed ? n : t.subs) / maxE);
+        const age = (T - t.post) / flight;
+        const pop = age < 1 ? 1 + 0.8 * (1 - age) : 1;
+        g.beginPath(); g.arc(t.x, t.y, r * pop, 0, 7);
+        if (isPaid) { g.fillStyle = 'rgba(255,246,232,.9)'; g.fill(); }
+        else if (isDead) { g.fillStyle = 'rgba(69,62,55,.95)'; g.fill(); }
+        else if (timed || t.out === 0) { g.fillStyle = 'rgba(217,160,151,.85)'; g.fill(); }
+        else { g.strokeStyle = 'rgba(217,160,151,.9)'; g.lineWidth = 1.4; g.stroke(); }
+        if (isPaid && T - t.pay < burst) {
+          const p = (T - t.pay) / burst;
+          g.beginPath(); g.arc(t.x, t.y, r + 4 + p * 26, 0, 7); g.strokeStyle = `rgba(231,64,121,${(1 - p).toFixed(3)})`; g.lineWidth = 2.5 * (1 - p) + 0.5; g.stroke();
+          g.beginPath(); g.arc(t.x, t.y, r, 0, 7); g.fillStyle = `rgba(231,64,121,${(1 - p).toFixed(3)})`; g.fill();
+        }
+        if (hover === t) { g.beginPath(); g.arc(t.x, t.y, r + 4, 0, 7); g.strokeStyle = C.cream; g.lineWidth = 1.5; g.stroke(); }
+      }
+      // entries in flight: from outside the spiral to the task
+      g.fillStyle = C.cream;
+      const RO = Math.max(w, h) * 0.62;
+      for (const [t, j, p] of dots) {
+        const a = hash(t.i, j) * 6.2832, ox = w / 2 + RO * Math.cos(a), oy = h / 2 + RO * Math.sin(a);
+        const e = 1 - Math.pow(1 - p, 3), x = ox + (t.x - ox) * e, y = oy + (t.y - oy) * e;
+        const q = Math.max(0, p - 0.1), e2 = 1 - Math.pow(1 - q, 3), x2 = ox + (t.x - ox) * e2, y2 = oy + (t.y - oy) * e2;
+        g.globalAlpha = 0.15 + 0.35 * p; g.strokeStyle = C.cream; g.lineWidth = 1; g.beginPath(); g.moveTo(x2, y2); g.lineTo(x, y); g.stroke();
+        g.globalAlpha = 0.45 + 0.55 * p; g.fillRect(x - 1.4, y - 1.4, 2.8, 2.8);
+      }
+      g.globalAlpha = 1;
+      $('#rp-clock').textContent = clockFmt(T);
+      const tok = chain === 'all' ? '' : ' ' + (R.chains.find((c) => c.key === chain)?.token || '');
+      $('#rp-stats').innerHTML = `<span><b>${fmt(posted)}</b>tasks posted</span><span><b>${fmt(ents)}</b>timed entries</span><span><b>${fmt(open)}</b>waiting</span><span class="pay"><b>${money(paid)}${esc(tok)}</b>paid out</span>`;
+      $('#rp-now').innerHTML = best ? `Busiest in the last 3 hours: <b>${esc(best.title)}</b> · ${fmt(bestN)} entries · ${money(best.reward)}${esc(tok)} · ${esc(best.ref)}` : 'Quiet: no entries in the last 3 hours.';
+      head.style.left = `${(T / R.seconds) * 100}%`;
+    }
+
+    function play() {
+      if (T >= R.seconds) T = 0;
+      playing = true; btn.textContent = '❚❚'; btn.setAttribute('aria-label', 'Pause');
+      last = performance.now(); requestAnimationFrame(frame);
+    }
+    function pause() { playing = false; btn.textContent = '▶'; btn.setAttribute('aria-label', 'Play'); }
+    btn.addEventListener('click', () => (playing ? pause() : play()));
+    const seek = (e) => { const r = tl.getBoundingClientRect(); T = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * R.seconds; if (!playing) draw(); };
+    tl.addEventListener('pointerdown', (e) => { tl.setPointerCapture(e.pointerId); seek(e); tl.onpointermove = seek; });
+    tl.addEventListener('pointerup', () => { tl.onpointermove = null; });
+    cv.addEventListener('pointermove', (e) => {
+      const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+      let bestT = null, bd = 14 * 14;
+      for (const t of list) { if (t.post > T) continue; const d = (t.x - x) ** 2 + (t.y - y) ** 2; if (d < bd) { bd = d; bestT = t; } }
+      hover = bestT;
+      if (bestT) {
+        const n = bestT.offs.filter((o) => bestT.post + o <= T).length;
+        const st = bestT.pay != null && T >= bestT.pay ? `paid ${money(bestT.paid)} to ${fmt(bestT.pays.reduce((s, p) => s + p[2], 0))} winner(s)` : bestT.dies != null && T >= bestT.dies ? 'expired or cancelled' : 'waiting for a decision';
+        cv.dataset.tip = `<b>${esc(bestT.title)}</b><br>${esc(bestT.ref)} · ${money(bestT.reward)} · ${bestT.offs.length ? `${fmt(n)} entries so far` : `${fmt(bestT.subs)} entries (times not fetched)`}<br>${st}`;
+      } else delete cv.dataset.tip;
+      if (!playing) draw();
+    });
+    cv.addEventListener('pointerleave', () => { hover = null; delete cv.dataset.tip; if (!playing) draw(); });
+    new ResizeObserver(() => { if (!R) return; layout(); drawHist(); if (!playing) draw(); }).observe(cv);
+
+    function start() {
+      started = true;
+      fetch(`data/replay.json?v=${encodeURIComponent(D.asOf)}`).then((r) => r.json()).then((data) => {
+        R = data;
+        const opts = R.chains.map((c) => [c.key, c.name]); opts.push(['all', 'Both']);
+        seg($('#rp-chain'), opts, chain, (v) => { chain = v; pick(); if (!playing) draw(); });
+        seg($('#rp-speed'), [['60', 'Week in 60 s'], ['20', 'in 20 s']], speedKey, (v) => { speedKey = v; });
+        pick();
+        const timed = R.tasks.filter((t) => t[4].length).length;
+        $('#rp-note').innerHTML = `${fmt(R.tasks.length)} tasks posted between ${esc(R.start.replace('T', ' ').slice(0, 16))} and ${esc(R.asOf.replace('T', ' ').slice(0, 16))} UTC on both chains. Entry and payout times come from <code>/api/tasks/&lt;id&gt;/submissions</code> (submittedAt) and <code>awards[].settledAt</code>, fetched for the ${fmt(timed)} tasks that completed; open, expired and cancelled tasks show their entry count as a ring, without arrival times, and turn grey at their deadline. Disc size follows entries. The strip below counts timed entries per hour, payouts in magenta. Drag it to scrub. Data: <a href="data/replay.json">data/replay.json</a>.`;
+        if (reduce) { T = R.seconds; pause(); draw(); } else if (visible) play(); else draw();
+      }).catch(() => { $('#rp-note').textContent = 'Replay data could not be loaded.'; });
+    }
+    new IntersectionObserver((es) => es.forEach((e) => {
+      visible = e.isIntersecting;
+      if (visible && !started) start();
+      else if (R && !reduce) { if (visible && !playing && T < R.seconds && btn.dataset.auto !== 'off') play(); else if (!visible && playing) pause(); }
+    }), { rootMargin: '0px 0px -20% 0px' }).observe(cv);
+    btn.addEventListener('click', () => { btn.dataset.auto = playing ? 'on' : 'off'; });
+  })();
+
   // Highlight the current view in the nav and jump to it on per-view pages.
   const view = document.body.dataset.view;
   if (view && view !== 'pulse') { const t = document.getElementById(view); if (t) requestAnimationFrame(() => t.scrollIntoView()); }
