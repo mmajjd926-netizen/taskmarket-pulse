@@ -602,6 +602,21 @@
       last = performance.now(); requestAnimationFrame(frame);
     }
     function pause() { playing = false; btn.textContent = '▶'; btn.setAttribute('aria-label', 'Play'); }
+    // Open on the finished week (a full spiral, not an empty frame), hold it, rewind fast, then play.
+    let fresh = true;
+    function intro() {
+      fresh = false; T = R.seconds; pause(); draw();
+      setTimeout(() => {
+        if (playing || !visible || btn.dataset.auto === 'off') return;
+        const t0 = performance.now(), dur = 900;
+        const step = (now) => {
+          if (playing) return;
+          const p = Math.min(1, (now - t0) / dur); T = R.seconds * (1 - p * p * (3 - 2 * p)); draw();
+          if (p < 1) requestAnimationFrame(step); else play();
+        };
+        requestAnimationFrame(step);
+      }, 2200);
+    }
     btn.addEventListener('click', () => (playing ? pause() : play()));
     const seek = (e) => { const r = tl.getBoundingClientRect(); T = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * R.seconds; if (!playing) draw(); };
     tl.addEventListener('pointerdown', (e) => { tl.setPointerCapture(e.pointerId); seek(e); tl.onpointermove = seek; });
@@ -631,13 +646,13 @@
         pick();
         const timed = R.tasks.filter((t) => t[4].length).length;
         $('#rp-note').innerHTML = `${fmt(R.tasks.length)} tasks posted between ${esc(R.start.replace('T', ' ').slice(0, 16))} and ${esc(R.asOf.replace('T', ' ').slice(0, 16))} UTC on both chains. Entry and payout times come from <code>/api/tasks/&lt;id&gt;/submissions</code> (submittedAt) and <code>awards[].settledAt</code>, fetched for the ${fmt(timed)} tasks that completed; open, expired and cancelled tasks show their entry count as a ring, without arrival times, and turn grey at their deadline. Disc size follows entries. The strip below counts timed entries per hour, payouts in magenta. Drag it to scrub. Data: <a href="data/replay.json">data/replay.json</a>.`;
-        if (reduce) { T = R.seconds; pause(); draw(); } else if (visible) play(); else draw();
+        if (reduce) { T = R.seconds; pause(); draw(); } else if (visible) intro(); else { T = R.seconds; draw(); }
       }).catch(() => { $('#rp-note').textContent = 'Replay data could not be loaded.'; });
     }
     new IntersectionObserver((es) => es.forEach((e) => {
       visible = e.isIntersecting;
       if (visible && !started) start();
-      else if (R && !reduce) { if (visible && !playing && T < R.seconds && btn.dataset.auto !== 'off') play(); else if (!visible && playing) pause(); }
+      else if (R && !reduce) { if (visible && fresh) intro(); else if (visible && !playing && T < R.seconds && btn.dataset.auto !== 'off') play(); else if (!visible && playing) pause(); }
     }), { rootMargin: '0px 0px -20% 0px' }).observe(cv);
     btn.addEventListener('click', () => { btn.dataset.auto = playing ? 'on' : 'off'; });
   })();
